@@ -102,24 +102,23 @@ function DetailsPanel({ item }) {
   );
 }
 
-function QueuePanel({ item, entries }) {
-  const waiting = getWaitingQueue(entries, item.service.id);
-
+function QueuePanel({ item, entries, serviceList }) {
+  const waiting = getWaitingQueue(entries, serviceList);
   return (
     <ol className={styles.queueList}>
       {waiting.map((e, i) => {
         const isYou = e.id === item.entry.id;
-
+        const priority = serviceList.find((s) => s.id === e.serviceId).priority;
         let className = "";
         let youLabel = null;
         if (isYou) {
           className = styles.you;
           youLabel = <strong>(You)</strong>;
         }
-
         return (
           <li key={e.id} className={className}>
-            {i + 1}. {e.ticketNumber} {youLabel}
+            {i + 1}. {e.ticketNumber}{" "}
+            <span className={styles.priorityTag}>{priority}</span> {youLabel}
           </li>
         );
       })}
@@ -200,7 +199,10 @@ function QueueStatus({
                   <span className={styles.itemTicket}>
                     {a.entry.ticketNumber}
                   </span>
-                  <span className={styles.itemPosition}>#{a.position}</span>
+                  <span className={styles.itemPosition}>
+                    #{a.position}
+                    <small className={styles.itemPositionLabel}>in queue</small>
+                  </span>
                 </button>
               </li>
             );
@@ -248,7 +250,13 @@ function QueueStatus({
 
         <div role="tabpanel" className={styles.panel}>
           {tab === "details" && <DetailsPanel item={selected} />}
-          {tab === "queue" && <QueuePanel item={selected} entries={entries} />}
+          {tab === "queue" && (
+            <QueuePanel
+              item={selected}
+              entries={entries}
+              serviceList={serviceList}
+            />
+          )}
           {tab === "updates" && (
             <UpdatesPanel item={selected} updates={updates} />
           )}
