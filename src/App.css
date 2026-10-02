@@ -1,0 +1,301 @@
+/* ==============================
+   GLOBAL
+================================ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f5f7fb;
+  color: #1f2937;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+
+/* ==============================
+   LOGIN PAGE
+================================ */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f4f6f8;
+}
+
+.login-container {
+  width: 400px;
+  padding: 40px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+.login-container h1 {
+  text-align: center;
+  margin: 0 0 5px;
+  color: #111827;
+}
+
+.subtitle {
+  text-align: center;
+  margin: 0 0 30px;
+  color: #6b7280;
+}
+
+.login-container form {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-container label {
+  margin-bottom: 7px;
+  font-weight: 600;
+}
+
+.login-container input {
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 15px;
+}
+
+.login-container input:focus {
+  outline: none;
+  border-color: #2563eb;
+}
+
+.login-container button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 7px;
+  background: #2563eb;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-container button:hover {
+  background: #1d4ed8;
+}
+
+.register {
+  margin-top: 20px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.register span {
+  color: #2563eb;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+
+/* ==============================
+   HOME PAGE
+================================ */
+
+.home-page {
+  min-height: 100vh;
+  background: #f5f7fb;
+}
+
+
+/* NAVBAR */
+
+.navbar {
+  height: 72px;
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 7%;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.navbar h2 {
+  margin: 0;
+  color: #2563eb;
+  font-size: 25px;
+}
+
+.navbar div {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.navbar span {
+  color: #4b5563;
+  font-size: 15px;
+}
+
+.logout-button {
+  width: auto;
+  background: transparent;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+  border-radius: 7px;
+  padding: 9px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background: #eff6ff;
+}
+
+
+/* MAIN CONTENT */
+
+.home-content {
+  width: 90%;
+  max-width: 900px;
+  margin: 45px auto;
+}
+
+.welcome {
+  margin-bottom: 30px;
+}
+
+.welcome h1 {
+  margin: 0 0 8px;
+  font-size: 32px;
+  color: #111827;
+}
+
+.welcome p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+
+/* CARDS */
+
+.ticket-form-container,
+.my-tickets {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 30px;
+  margin-bottom: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.ticket-form-container h2,
+.my-tickets h2 {
+  margin: 0 0 25px;
+  color: #111827;
+}
+
+
+/* TICKET FORM */
+
+.ticket-form-container form {
+  display: flex;
+  flex-direction: column;
+}
+
+.ticket-form-container label {
+  margin-bottom: 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ticket-form-container input,
+.ticket-form-container select,
+.ticket-form-container textarea {
+  width: 100%;
+  padding: 12px 14px;
+  margin-bottom: 20px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 15px;
+  color: #111827;
+}
+
+.ticket-form-container input:focus,
+.ticket-form-container select:focus,
+.ticket-form-container textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.ticket-form-container textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.ticket-form-container button {
+  align-self: flex-start;
+  width: auto;
+  padding: 11px 22px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 7px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ticket-form-container button:hover {
+  background: #1d4ed8;
+}
+
+
+/* MY TICKETS */
+
+.my-tickets p {
+  margin: 0;
+  color: #6b7280;
+}
+
+
+/* ==============================
+   MOBILE
+================================ */
+
+@media (max-width: 600px) {
+
+  .navbar {
+    padding: 0 20px;
+  }
+
+  .navbar span {
+    display: none;
+  }
+
+  .home-content {
+    width: 92%;
+    margin-top: 30px;
+  }
+
+  .ticket-form-container,
+  .my-tickets {
+    padding: 22px;
+  }
+
+  .login-container {
+    width: 90%;
+  }
+}
