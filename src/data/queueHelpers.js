@@ -1,5 +1,9 @@
 export const ALMOST_READY_POSITION = 2;
 
+function getService(services, entry) {
+  return services.find((s) => s.id === entry.serviceId);
+}
+
 const PRIORITY_RANK = { high: 3, medium: 2, low: 1 };
 
 function findService(services, entry) {
@@ -79,4 +83,25 @@ export function getActiveEntries(entries, services, userEmail) {
   }
 
   return results;
+}
+
+export function getHistory(entries, services, userEmail) {
+  return entries
+    .filter((e) => e.userEmail === userEmail)
+    .sort(
+      (a, b) =>
+        new Date(b.finishedAt ?? b.joinedAt) -
+        new Date(a.finishedAt ?? a.joinedAt)
+    )
+    .map((e) => ({
+      id: e.id,
+      date: (e.finishedAt ?? e.joinedAt).slice(0, 10),
+      serviceName: getService(services, e).name,
+      outcome:
+        e.status === "served"
+          ? "Served"
+          : e.status === "canceled"
+            ? "Canceled"
+            : "Waiting",
+    }));
 }
