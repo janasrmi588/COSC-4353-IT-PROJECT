@@ -1,7 +1,7 @@
 .layout {
   --color-primary: var(--color-primary-team, #0000ff);
-  --color-tint: #61a5ff;
-  --color-border: #00368d;
+  --color-tint: var(--color-tint-team, #dbeafe);
+  --color-border: var(--color-border-team, #d1d5db);
 
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
