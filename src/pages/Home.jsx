@@ -67,16 +67,6 @@ function Home() {
               <option value="Other">Other</option>
             </select>
 
-            <label>Priority</label>
-            <select
-              value={priority}
-              onChange={(e) => setPriority(e.target.value)}
-            >
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-            </select>
-
             <label>Description</label>
             <textarea
               placeholder="Describe the issue you're experiencing..."
