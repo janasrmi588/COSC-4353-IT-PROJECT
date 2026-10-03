@@ -1,0 +1,28 @@
+.qm-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.qm-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 220px;
+}
+
+.qm-field label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.qm-field select {
+  padding: 9px 12px;
+  border: 1px solid #d3d8e4;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+}
