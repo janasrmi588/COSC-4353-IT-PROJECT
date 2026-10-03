@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { services as initialServices, queueEntries } from "../data/queueMockData";
-import { getWaitingQueue } from "../data/queueHelpers";
+import { services as initialServices, queueEntries } from "../../data/queueMockData";
+import { getWaitingQueue } from "../../data/queueHelpers";
 import "./AdminDashboard.css";
 
 export default function AdminDashboard() {
