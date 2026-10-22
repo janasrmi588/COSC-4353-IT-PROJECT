@@ -1,11 +1,18 @@
 import { useState } from "react";
-
+import { useNavigate } from "react-router-dom";
 
 function Home() {
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("");
   const [priority, setPriority] = useState("Low");
   const [description, setDescription] = useState("");
+
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    sessionStorage.removeItem("user");
+    navigate("/");
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -26,7 +33,12 @@ function Home() {
 
         <div>
           <span>IT Help Desk</span>
-          <button className="logout-button">Log Out</button>
+          <button
+            className="logout-button"
+            onClick={handleLogout}
+          >
+            Log Out
+          </button>
         </div>
       </nav>
 

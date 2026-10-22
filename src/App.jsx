@@ -5,6 +5,7 @@ import History from "./pages/History";
 import QueueStatus from "./pages/QueueStatus";
 import ServiceManagement from "./pages/admin/ServiceManagement";
 import Dashboard from "./pages/Dashboard";
+import Register from "./pages/Register";
 import "./App.css";
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/queue-status" element={<QueueStatus />} />
         <Route path="/admin/services" element={<ServiceManagement />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path= "/register" element={<Register />} />
       </Routes>
     </BrowserRouter>
   );
