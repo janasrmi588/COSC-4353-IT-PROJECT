@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import authRoutes from "./modules/auth/auth.routes.js";
+import notificationRoutes from "./modules/notifications/notifications.routes.js";
 
 export function createApp() {
   const app = express();
@@ -17,6 +18,9 @@ export function createApp() {
 
   // Authentication routes
   app.use("/api/auth", authRoutes);
+
+  // Notification routes
+  app.use("/api/notifications", notificationRoutes);
 
   return app;
 }
