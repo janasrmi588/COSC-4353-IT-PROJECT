@@ -1,12 +1,7 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  services,
-  queueEntries,
-  notifications,
-  mockCurrentUser,
-} from "../data/queueMockData";
+import { services, queueEntries, mockCurrentUser } from "../data/queueMockData";
 import { getActiveEntries } from "../data/queueHelpers";
+import { getStoredUser, useNotifications } from "../data/useNotifications";
 import styles from "./Dashboard.module.css";
 
 const STATUS_LABEL = {
@@ -42,11 +37,8 @@ function formatTime(iso) {
 function Dashboard({
   entries = queueEntries,
   serviceList = services,
-  notificationList = notifications,
   currentUser = mockCurrentUser,
 }) {
-  const [readIds, setReadIds] = useState([]);
-
   const active = getActiveEntries(entries, serviceList, currentUser.email);
 
   const openServices = serviceList.filter((s) => s.isOpen);
@@ -54,18 +46,29 @@ function Dashboard({
     entries.filter((e) => e.status === "waiting" && e.serviceId === serviceId)
       .length;
 
-  const isRead = (n) => n.read || readIds.includes(n.id);
-  const markAsRead = (id) =>
-    setReadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  const loggedInEmail = getStoredUser()?.email;
+  const {
+    notifications: myNotifications,
+    loading: notificationsLoading,
+    error: notificationsError,
+    markAsRead,
+  } = useNotifications(loggedInEmail);
 
-  const myNotifications = notificationList
-    .filter((n) => n.userEmail === currentUser.email)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const isRead = (n) => n.read;
   const unreadNotifications = myNotifications.filter((n) => !isRead(n));
   const recentNotifications = myNotifications.slice(
     0,
     RECENT_NOTIFICATION_COUNT,
   );
+
+  let emptyNotificationsMessage = "You have no notifications.";
+  if (!loggedInEmail) {
+    emptyNotificationsMessage = "Log in to see your notifications.";
+  } else if (notificationsLoading) {
+    emptyNotificationsMessage = "Loading notifications...";
+  } else if (notificationsError) {
+    emptyNotificationsMessage = notificationsError;
+  }
 
   return (
     <main className={styles.page}>
@@ -215,8 +218,14 @@ function Dashboard({
             </span>
           </div>
 
+          {notificationsError && recentNotifications.length > 0 && (
+            <p className={styles.empty} role="alert">
+              {notificationsError}
+            </p>
+          )}
+
           {recentNotifications.length === 0 ? (
-            <p className={styles.empty}>You have no notifications.</p>
+            <p className={styles.empty}>{emptyNotificationsMessage}</p>
           ) : (
             <ul className={styles.list}>
               {recentNotifications.map((n) => (
