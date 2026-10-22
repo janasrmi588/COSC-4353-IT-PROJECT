@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
-import { services as initialServices } from "../../data/queueMockData";
 import {
+  createService,
+  deleteService,
+  fetchServices,
+  updateService,
+} from "../../data/servicesApi";
+import { getStoredUser } from "../../data/useNotifications";
+import {
+  DESCRIPTION_MAX_LENGTH,
   EMPTY_SERVICE_FORM,
   NAME_MAX_LENGTH,
   PRIORITY_LABELS,
@@ -10,7 +17,11 @@ import {
 import styles from "./ServiceManagement.module.css";
 
 function ServiceManagement() {
-  const [serviceList, setServiceList] = useState(initialServices);
+  const [serviceList, setServiceList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(EMPTY_SERVICE_FORM);
   const [touched, setTouched] = useState({});
@@ -26,11 +37,34 @@ function ServiceManagement() {
     return () => clearTimeout(timer);
   }, [message]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadServices() {
+      const result = await fetchServices();
+      if (ignore) return;
+
+      if (result.ok) {
+        setServiceList(result.services);
+      } else {
+        setLoadError(result.message);
+      }
+      setLoading(false);
+    }
+
+    loadServices();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   function resetForm() {
     setEditingId(null);
     setForm(EMPTY_SERVICE_FORM);
     setTouched({});
     setSubmitted(false);
+    setSaveError("");
   }
 
   function handleChange(event) {
@@ -53,11 +87,13 @@ function ServiceManagement() {
     });
     setTouched({});
     setSubmitted(false);
+    setSaveError("");
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setSubmitted(true);
+    setSaveError("");
     if (Object.keys(errors).length > 0) return;
 
     const values = {
@@ -67,19 +103,53 @@ function ServiceManagement() {
       priority: form.priority,
     };
 
+    const adminEmail = getStoredUser()?.email;
+
+    setSaving(true);
+    const result =
+      editingId === null
+        ? await createService(adminEmail, values)
+        : await updateService(adminEmail, editingId, values);
+    setSaving(false);
+
+    if (!result.ok) {
+      setSaveError(result.message);
+      return;
+    }
+
     if (editingId === null) {
-      setServiceList((prev) => {
-        const nextId = prev.reduce((max, s) => Math.max(max, s.id), 0) + 1;
-        return [...prev, { id: nextId, isOpen: true, ...values }];
-      });
-      setMessage(`Created ${values.name}.`);
+      setServiceList((prev) => [...prev, result.service]);
+      setMessage(`Created ${result.service.name}.`);
     } else {
       setServiceList((prev) =>
-        prev.map((s) => (s.id === editingId ? { ...s, ...values } : s)),
+        prev.map((s) => (s.id === result.service.id ? result.service : s)),
       );
-      setMessage(`Saved changes to ${values.name}.`);
+      setMessage(`Saved changes to ${result.service.name}.`);
     }
     resetForm();
+  }
+
+  async function handleDelete(service) {
+    const confirmed = window.confirm(
+      `Delete "${service.name}"? This can't be undone.`,
+    );
+    if (!confirmed) return;
+
+    setSaveError("");
+    setSaving(true);
+    const result = await deleteService(getStoredUser()?.email, service.id);
+    setSaving(false);
+
+    if (!result.ok) {
+      setSaveError(result.message);
+      return;
+    }
+
+    setServiceList((prev) => prev.filter((s) => s.id !== service.id));
+    if (editingId === service.id) {
+      resetForm();
+    }
+    setMessage(`Deleted ${service.name}.`);
   }
 
   const isEditing = editingId !== null;
@@ -110,6 +180,12 @@ function ServiceManagement() {
         </p>
       )}
 
+      {(loadError || saveError) && (
+        <p className={styles.error} role="alert">
+          {loadError || saveError}
+        </p>
+      )}
+
       <div className={styles.layout}>
         <section className={styles.panel} aria-labelledby="service-list-title">
           <div className={styles.panelHeader}>
@@ -123,6 +199,10 @@ function ServiceManagement() {
           </div>
 
           <ul className={styles.list}>
+            {loading && <li className={styles.row}>Loading services...</li>}
+            {!loading && !loadError && serviceList.length === 0 && (
+              <li className={styles.row}>No services yet.</li>
+            )}
             {serviceList.map((service) => {
               const selected = service.id === editingId;
               return (
@@ -152,6 +232,15 @@ function ServiceManagement() {
                       aria-label={`${selected ? "Currently editing" : "Edit"} ${service.name}`}
                     >
                       {selected ? "Editing" : "Edit"}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.dangerButton}
+                      onClick={() => handleDelete(service)}
+                      disabled={saving}
+                      aria-label={`Delete ${service.name}`}
+                    >
+                      Delete
                     </button>
                   </div>
                 </li>
@@ -214,6 +303,7 @@ function ServiceManagement() {
                   showError("description") ? styles.inputError : ""
                 }`}
                 value={form.description}
+                maxLength={DESCRIPTION_MAX_LENGTH}
                 onChange={handleChange}
                 onBlur={handleBlur}
                 aria-invalid={Boolean(showError("description"))}
@@ -288,7 +378,11 @@ function ServiceManagement() {
             </fieldset>
 
             <div className={styles.actions}>
-              <button type="submit" className={styles.primaryButton}>
+              <button
+                type="submit"
+                className={styles.primaryButton}
+                disabled={saving}
+              >
                 {isEditing ? "Save changes" : "Create service"}
               </button>
               <button

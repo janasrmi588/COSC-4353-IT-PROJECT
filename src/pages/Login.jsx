@@ -39,7 +39,7 @@ function Login() {
 
       // Send users to the correct dashboard based on their role
       if (data.user.role === "administrator") {
-        navigate("/Dashboard");
+        navigate("/admin/dashboard");
       } else {
         navigate("/home");
       }
@@ -54,12 +54,10 @@ function Login() {
   return (
     <div className="login-page">
       <div className="login-container">
-
         <h1>QueueSmart</h1>
         <p className="subtitle">University IT Help Desk</p>
 
         <form onSubmit={handleLogin}>
-
           <label>Email</label>
           <input
             type="email"
@@ -83,16 +81,12 @@ function Login() {
           <button type="submit" disabled={loading}>
             {loading ? "Logging In..." : "Log In"}
           </button>
-
         </form>
 
         <p className="register">
           Don't have an account?{" "}
-          <span onClick={() => navigate("/register")}>
-            Register
-          </span>
+          <span onClick={() => navigate("/register")}>Register</span>
         </p>
-
       </div>
     </div>
   );

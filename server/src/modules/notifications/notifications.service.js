@@ -1,27 +1,10 @@
 // Notification module, logic: trigger a notification when a user joins a queue and when a user
 // is close to being served. Notifications may be logged or returned to the front end (no real email/SMS).
 import { notifications } from "../../data/store.js";
-
-// Notification module, logic.
-//
-// No real email/SMS: a notification is saved in the in-memory `notifications`
-// array (data/store.js), logged to the console, and returned to the front end
-// when it asks for it.
-//
-// A notification looks like:
-//   { id, userEmail, entryId, type, message, read, createdAt }
-//
-// Same style as auth.service.js: every function returns
-//   { success: true,  status, ...data }   or
-//   { success: false, status, message }
-// so the routes can send the result straight back.
-
 export const NOTIFICATION_TYPES = ["status", "queue"];
 export const MESSAGE_MAX_LENGTH = 500;
 export const EMAIL_MAX_LENGTH = 254;
 
-// A waiting user at this position or closer to the front is "almost ready".
-// Keep this the same as the value the queue / wait-time modules use.
 export const ALMOST_READY_POSITION = 2;
 
 function fail(status, message) {
@@ -36,20 +19,6 @@ function nextNotificationId() {
   return Math.max(0, ...notifications.map((n) => n.id)) + 1;
 }
 
-/**
- * Save a notification for a user.
- *
- * Other modules call this when something happens, for example:
- *   createNotification({
- *     userEmail: "student@uh.edu",
- *     entryId: 5,
- *     type: "status",
- *     message: "You joined the Password Reset queue.",
- *   });
- *
- * Returns { success: true, status: 201, notification }, or a 400 result when the
- * input is invalid (missing email or message, unknown type, message too long).
- */
 export function createNotification({
   userEmail,
   entryId = null,
@@ -92,17 +61,11 @@ export function createNotification({
   };
 
   notifications.push(notification);
-
-  // Stands in for sending an email/SMS.
   console.log(`[notification -> ${email}] ${text}`);
 
   return { success: true, status: 201, notification };
 }
 
-/**
- * Trigger: a user joined a queue.
- * The queue module calls this right after it creates the queue entry.
- */
 export function notifyJoinedQueue({ userEmail, entryId = null, serviceName }) {
   return createNotification({
     userEmail,
@@ -112,14 +75,6 @@ export function notifyJoinedQueue({ userEmail, entryId = null, serviceName }) {
   });
 }
 
-/**
- * Trigger: a user is close to being served.
- * The queue module calls this when someone's position reaches
- * ALMOST_READY_POSITION or better (for example after "serve next").
- *
- * Calling it again for the same entry does nothing, so the user never gets
- * the same "almost ready" message twice.
- */
 export function notifyAlmostReady({ userEmail, entryId = null, serviceName }) {
   const email = normalizeEmail(userEmail);
   const message = `You are almost up for ${serviceName}.`;
@@ -138,10 +93,6 @@ export function notifyAlmostReady({ userEmail, entryId = null, serviceName }) {
   return createNotification({ userEmail, entryId, type: "status", message });
 }
 
-/**
- * A user's notifications, newest first.
- * Optional filter: { unreadOnly: true }.
- */
 export function listNotifications(userEmail, { unreadOnly = false } = {}) {
   const email = normalizeEmail(userEmail);
   if (!email) {
@@ -150,7 +101,6 @@ export function listNotifications(userEmail, { unreadOnly = false } = {}) {
 
   const mine = notifications
     .filter((n) => n.userEmail === email && (!unreadOnly || !n.read))
-    // Newest first. The id breaks ties when two share a timestamp.
     .sort((a, b) => {
       const byTime = new Date(b.createdAt) - new Date(a.createdAt);
       return byTime !== 0 ? byTime : b.id - a.id;
@@ -164,11 +114,6 @@ export function listNotifications(userEmail, { unreadOnly = false } = {}) {
   };
 }
 
-/**
- * Mark one of the user's OWN notifications as read.
- * A notification that is missing or belongs to someone else gives the same
- * 404, so one user can't find out what another user has.
- */
 export function markNotificationRead(userEmail, id) {
   const email = normalizeEmail(userEmail);
   if (!email) {
