@@ -1,4 +1,7 @@
+// These limits match the back end (server/src/modules/services/services.service.js).
 export const NAME_MAX_LENGTH = 100;
+export const DESCRIPTION_MAX_LENGTH = 500;
+export const DURATION_MAX = 480; // minutes
 
 export const PRIORITY_LEVELS = ["low", "medium", "high"];
 
@@ -25,8 +28,11 @@ export function validateService(values) {
     errors.name = `Service name must be ${NAME_MAX_LENGTH} characters or fewer.`;
   }
 
-  if (!values.description.trim()) {
+  const description = values.description.trim();
+  if (!description) {
     errors.description = "Description is required.";
+  } else if (description.length > DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Description must be ${DESCRIPTION_MAX_LENGTH} characters or fewer.`;
   }
 
   const duration = String(values.expectedDuration).trim();
@@ -34,6 +40,8 @@ export function validateService(values) {
     errors.expectedDuration = "Expected duration is required.";
   } else if (!/^\d+$/.test(duration) || Number(duration) < 1) {
     errors.expectedDuration = "Enter a whole number of minutes, 1 or more.";
+  } else if (Number(duration) > DURATION_MAX) {
+    errors.expectedDuration = `Expected duration can't be more than ${DURATION_MAX} minutes.`;
   }
 
   if (!PRIORITY_LEVELS.includes(values.priority)) {

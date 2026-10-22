@@ -33,3 +33,38 @@ export const notifications = [
     createdAt: "2026-10-02T08:00:00.000Z",
   },
 ];
+
+export const services = [
+  {
+    id: 1,
+    name: "Password Reset",
+    description: "Reset or unlock your university account.",
+    expectedDuration: 10,
+    priority: "high",
+    isOpen: true,
+  },
+  {
+    id: 2,
+    name: "Wi-Fi / Network Help",
+    description: "Trouble connecting to campus Wi-Fi or the VPN.",
+    expectedDuration: 10,
+    priority: "high",
+    isOpen: true,
+  },
+  {
+    id: 3,
+    name: "Software Install Request",
+    description: "Request or troubleshoot licensed software.",
+    expectedDuration: 10,
+    priority: "high",
+    isOpen: true,
+  },
+  {
+    id: 4,
+    name: "Hardware Repair",
+    description: "Laptop, printer, and lab computer issues.",
+    expectedDuration: 10,
+    priority: "high",
+    isOpen: false,
+  },
+];

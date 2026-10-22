@@ -320,7 +320,8 @@
 }
 
 .primaryButton,
-.secondaryButton {
+.secondaryButton,
+.dangerButton {
   min-height: 44px;
   padding: 0 20px;
   font: inherit;
@@ -342,8 +343,25 @@
   border: 1px solid var(--field-border);
 }
 
+.dangerButton {
+  font-weight: 500;
+  color: var(--error);
+  background: #fff;
+  border: 1px solid var(--error);
+}
+
+.dangerButton:hover:not(:disabled) {
+  background: #fbe9e7;
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .primaryButton:focus-visible,
 .secondaryButton:focus-visible,
+.dangerButton:focus-visible,
 .input:focus-visible {
   outline: 3px solid #f2b84b;
   outline-offset: 2px;
