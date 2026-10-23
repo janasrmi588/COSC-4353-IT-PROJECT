@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { fetchServices } from "../data/servicesApi";
 import { fetchMyQueues, joinQueue, leaveQueue } from "../data/queueAPI";
 import { getStoredUser } from "../data/useNotifications";
@@ -21,7 +20,6 @@ function Home() {
   const [notice, setNotice] = useState("");
   const [reloadCount, setReloadCount] = useState(0);
 
-  const navigate = useNavigate();
   const loadedOnce = useRef(false);
 
   // Keep the user's positions and wait times fresh while the page is open.
@@ -57,11 +55,6 @@ function Home() {
       ignore = true;
     };
   }, [email, reloadCount]);
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("user");
-    navigate("/");
-  };
 
   // Submitting the form puts the user in line for the chosen service.
   const handleSubmit = async (e) => {
@@ -110,17 +103,6 @@ function Home() {
 
   return (
     <div className="home-page">
-      <nav className="navbar">
-        <h2>QueueSmart</h2>
-
-        <div>
-          <span>IT Help Desk</span>
-          <button className="logout-button" onClick={handleLogout}>
-            Log Out
-          </button>
-        </div>
-      </nav>
-
       <main className="home-content">
         <div className="welcome">
           <h1>IT Help Desk</h1>
