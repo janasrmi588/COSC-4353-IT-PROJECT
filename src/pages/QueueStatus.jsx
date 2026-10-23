@@ -1,11 +1,6 @@
 import { useState } from "react";
-import {
-  services,
-  queueEntries,
-  statusUpdates,
-  mockCurrentUser,
-} from "../data/queueMockData";
-import { getActiveEntries, getWaitingQueue } from "../data/queueHelpers";
+import { getStoredUser, useNotifications } from "../data/useNotifications";
+import { useMyQueues } from "../data/useMyQueues";
 import styles from "./QueueStatus.module.css";
 
 const STEPS = ["waiting", "almost ready", "served"];
@@ -21,6 +16,11 @@ const STATUS_CLASS = {
   "almost ready": "almostReady",
   served: "served",
   canceled: "canceled",
+};
+
+const TYPE_LABEL = {
+  status: "Status change",
+  queue: "Queue update",
 };
 
 function formatTime(iso) {
@@ -102,64 +102,61 @@ function DetailsPanel({ item }) {
   );
 }
 
-function QueuePanel({ item, entries, serviceList }) {
-  const waiting = getWaitingQueue(entries, serviceList);
+// The server does not share other people's tickets, so the line is shown as
+// anonymous spots ahead of the user.
+function QueuePanel({ item }) {
+  const ahead = Array.from({ length: item.peopleAhead }, (_, i) => i + 1);
   return (
     <ol className={styles.queueList}>
-      {waiting.map((e, i) => {
-        const isYou = e.id === item.entry.id;
-        const priority = serviceList.find((s) => s.id === e.serviceId).priority;
-        let className = "";
-        let youLabel = null;
-        if (isYou) {
-          className = styles.you;
-          youLabel = <strong>(You)</strong>;
-        }
-        return (
-          <li key={e.id} className={className}>
-            {i + 1}. {e.ticketNumber}{" "}
-            <span className={styles.priorityTag}>{priority}</span> {youLabel}
-          </li>
-        );
-      })}
+      {ahead.map((n) => (
+        <li key={n}>{n}. Another person</li>
+      ))}
+      <li className={styles.you}>
+        {item.position}. {item.entry.ticketNumber} <strong>(You)</strong>
+      </li>
     </ol>
   );
 }
 
-function UpdatesPanel({ item, updates }) {
-  const mine = updates.filter((u) => u.entryId === item.entry.id);
+function UpdatesPanel({ item, notifications }) {
+  const mine = notifications
+    .filter((n) => n.entryId === item.entry.id)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-  mine.sort((a, b) => {
-    const timeA = new Date(a.timestamp);
-    const timeB = new Date(b.timestamp);
-    return timeB - timeA;
-  });
   if (mine.length === 0) return <p>No updates yet.</p>;
   return (
     <ul className={styles.updates}>
-      {mine.map((u) => (
-        <li key={u.id}>
-          <span>{STATUS_LABEL[u.status]}</span> {u.message}
-          <time dateTime={u.timestamp}> {formatTime(u.timestamp)}</time>
+      {mine.map((n) => (
+        <li key={n.id}>
+          <span>{TYPE_LABEL[n.type] || "Update"}</span> {n.message}
+          <time dateTime={n.createdAt}> {formatTime(n.createdAt)}</time>
         </li>
       ))}
     </ul>
   );
 }
 
-function QueueStatus({
-  entries = queueEntries,
-  serviceList = services,
-  updates = statusUpdates,
-  currentUser = mockCurrentUser,
-}) {
-  const active = getActiveEntries(entries, serviceList, currentUser.email);
-  let firstId = null;
-  if (active.length > 0) {
-    firstId = active[0].entry.id;
-  }
-  const [selectedId, setSelectedId] = useState(firstId);
+function Message({ children }) {
+  return (
+    <main className={styles.layout}>
+      <section className={styles.empty}>
+        <h1>Queue Status</h1>
+        <p>{children}</p>
+      </section>
+    </main>
+  );
+}
+
+function QueueStatus() {
+  const email = getStoredUser()?.email;
+  const { active, loading, error } = useMyQueues(email);
+  const { notifications } = useNotifications(email);
+  const [selectedId, setSelectedId] = useState(null);
   const [tab, setTab] = useState("queue");
+
+  if (!email) return <Message>Log in to see your queues.</Message>;
+  if (loading) return <Message>Loading your queues...</Message>;
+  if (error) return <Message>{error}</Message>;
 
   let selected = active.find((a) => a.entry.id === selectedId);
   if (selected === undefined) {
@@ -167,14 +164,7 @@ function QueueStatus({
   }
 
   if (!selected) {
-    return (
-      <main className={styles.layout}>
-        <section className={styles.empty}>
-          <h1>Queue Status</h1>
-          <p>You're not in a queue yet.</p>
-        </section>
-      </main>
-    );
+    return <Message>You're not in a queue yet.</Message>;
   }
 
   return (
@@ -250,15 +240,9 @@ function QueueStatus({
 
         <div role="tabpanel" className={styles.panel}>
           {tab === "details" && <DetailsPanel item={selected} />}
-          {tab === "queue" && (
-            <QueuePanel
-              item={selected}
-              entries={entries}
-              serviceList={serviceList}
-            />
-          )}
+          {tab === "queue" && <QueuePanel item={selected} />}
           {tab === "updates" && (
-            <UpdatesPanel item={selected} updates={updates} />
+            <UpdatesPanel item={selected} notifications={notifications} />
           )}
         </div>
       </section>

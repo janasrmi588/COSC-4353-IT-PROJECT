@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
-import { services, queueEntries, mockCurrentUser } from "../data/queueMockData";
-import { getActiveEntries } from "../data/queueHelpers";
 import { getStoredUser, useNotifications } from "../data/useNotifications";
+import { useMyQueues } from "../data/useMyQueues";
 import styles from "./Dashboard.module.css";
 
 const STATUS_LABEL = {
@@ -34,19 +33,17 @@ function formatTime(iso) {
   });
 }
 
-function Dashboard({
-  entries = queueEntries,
-  serviceList = services,
-  currentUser = mockCurrentUser,
-}) {
-  const active = getActiveEntries(entries, serviceList, currentUser.email);
+function Dashboard() {
+  const loggedInEmail = getStoredUser()?.email;
+  const {
+    active,
+    services: serviceList,
+    loading: queuesLoading,
+    error: queuesError,
+  } = useMyQueues(loggedInEmail);
 
   const openServices = serviceList.filter((s) => s.isOpen);
-  const waitingFor = (serviceId) =>
-    entries.filter((e) => e.status === "waiting" && e.serviceId === serviceId)
-      .length;
 
-  const loggedInEmail = getStoredUser()?.email;
   const {
     notifications: myNotifications,
     loading: notificationsLoading,
@@ -129,7 +126,13 @@ function Dashboard({
           </div>
         </div>
 
-        {active.length === 0 ? (
+        {queuesLoading ? (
+          <p className={styles.empty}>Loading your queues...</p>
+        ) : queuesError ? (
+          <p className={styles.empty} role="alert">
+            {queuesError}
+          </p>
+        ) : active.length === 0 ? (
           <p className={styles.empty}>You're not in a queue right now.</p>
         ) : (
           <ul className={styles.list}>
@@ -180,13 +183,15 @@ function Dashboard({
             </h2>
             <span className={styles.count}>
               {openServices.length} open ·{" "}
-              <Link to="/queues" className={styles.link}>
+              <Link to="/home" className={styles.link}>
                 Join a queue
               </Link>
             </span>
           </div>
 
-          {openServices.length === 0 ? (
+          {queuesLoading ? (
+            <p className={styles.empty}>Loading services...</p>
+          ) : openServices.length === 0 ? (
             <p className={styles.empty}>No services are open right now.</p>
           ) : (
             <ul className={styles.list}>
@@ -198,8 +203,7 @@ function Dashboard({
                       {service.description}
                     </div>
                     <div className={styles.rowMeta}>
-                      {service.expectedDuration} min per person ·{" "}
-                      {waitingFor(service.id)} waiting
+                      {service.expectedDuration} min per person
                     </div>
                   </div>
                   <span
