@@ -4,6 +4,7 @@ import authRoutes from "./modules/auth/auth.routes.js";
 import notificationRoutes from "./modules/notifications/notifications.routes.js";
 import serviceRoutes from "./modules/services/services.routes.js";
 import queueRoutes from "./modules/queue/queue.routes.js";
+import historyRoutes from "./modules/history/history.routes.js";
 
 export function createApp() {
   const app = express();
@@ -29,6 +30,9 @@ export function createApp() {
 
   // Queue management routes
   app.use("/api/queue", queueRoutes);
+
+  // History routes
+  app.use("/api/history", historyRoutes);
 
   return app;
 }
