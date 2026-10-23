@@ -5,6 +5,7 @@ import {
   notifyAlmostReady,
   notifyJoinedQueue,
 } from "../notifications/notifications.service.js";
+import { estimateWait } from "../waitTime/waitTime.service.js";
 
 export const ENTRY_STATUSES = ["waiting", "served", "canceled"];
 
@@ -80,16 +81,6 @@ export function getWaitingEntries(serviceId = null) {
         e.status === "waiting" && (serviceId === null || e.serviceId === serviceId),
     )
     .sort(compareEntries);
-}
-
-// Basic, rule-based estimate: everyone ahead of you takes their service's
-// expected duration (minutes).
-function estimateWait(line, index) {
-  let total = 0;
-  for (let i = 0; i < index; i++) {
-    total += getService(line[i].serviceId)?.expectedDuration ?? 0;
-  }
-  return total;
 }
 
 // What the front end gets for one waiting entry. `position` is 1-based inside
@@ -189,6 +180,9 @@ export function joinQueue(userEmail, body) {
     entryId: entry.id,
     serviceName: service.name,
   });
+
+  // Someone who joins straight into the first spots is already almost up.
+  notifyFrontOfLine(serviceId);
 
   const line = getWaitingEntries(serviceId);
   const index = line.findIndex((e) => e.id === entry.id);
