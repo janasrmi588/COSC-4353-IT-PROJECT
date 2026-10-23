@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchServices } from "../data/servicesApi";
 import { fetchMyQueues, joinQueue, leaveQueue } from "../data/queueAPI";
 import { getStoredUser } from "../data/useNotifications";
+import { useAutoRefresh } from "../data/useAutoRefresh";
 
 function Home() {
   const user = getStoredUser();
@@ -21,6 +22,11 @@ function Home() {
   const [reloadCount, setReloadCount] = useState(0);
 
   const navigate = useNavigate();
+  const loadedOnce = useRef(false);
+
+  // Keep the user's positions and wait times fresh while the page is open.
+  const refresh = useCallback(() => setReloadCount((n) => n + 1), []);
+  useAutoRefresh(refresh, Boolean(email));
 
   useEffect(() => {
     if (!email) return;
@@ -38,7 +44,12 @@ function Home() {
       if (mineResult.ok) setMyEntries(mineResult.entries);
 
       const failed = [servicesResult, mineResult].find((r) => !r.ok);
-      if (failed) setError(failed.message);
+      if (!failed) {
+        loadedOnce.current = true;
+      } else if (!loadedOnce.current) {
+        // A failed refresh later on keeps the last good data and stays quiet.
+        setError(failed.message);
+      }
     }
 
     load();
@@ -99,37 +110,30 @@ function Home() {
 
   return (
     <div className="home-page">
-
       <nav className="navbar">
         <h2>QueueSmart</h2>
 
         <div>
           <span>IT Help Desk</span>
-          <button
-            className="logout-button"
-            onClick={handleLogout}
-          >
+          <button className="logout-button" onClick={handleLogout}>
             Log Out
           </button>
         </div>
       </nav>
 
       <main className="home-content">
-
         <div className="welcome">
           <h1>IT Help Desk</h1>
           <p>Submit a ticket and track your IT support requests.</p>
         </div>
 
         <div className="ticket-form-container">
-
           <h2>Create a Ticket</h2>
 
           {error && <p role="alert">{error}</p>}
           {notice && <p role="status">{notice}</p>}
 
           <form onSubmit={handleSubmit}>
-
             <label>Issue Title</label>
             <input
               type="text"
@@ -169,9 +173,7 @@ function Home() {
             <button type="submit" disabled={submitting}>
               {submitting ? "Joining..." : "Submit Ticket"}
             </button>
-
           </form>
-
         </div>
 
         <div className="my-tickets">
@@ -199,9 +201,7 @@ function Home() {
             </ul>
           )}
         </div>
-
       </main>
-
     </div>
   );
 }

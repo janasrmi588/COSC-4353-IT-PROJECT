@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 const API_URL = "http://localhost:3001/api/notifications";
 
@@ -17,10 +18,15 @@ export function getStoredUser() {
 //   const { notifications, loading, error, markAsRead } = useNotifications(email);
 //
 // Pass a falsy email (nobody logged in) and nothing is requested.
+// The list refreshes by itself every few seconds (see useAutoRefresh).
 export function useNotifications(email) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadCount, setReloadCount] = useState(0);
+
+  const refresh = useCallback(() => setReloadCount((n) => n + 1), []);
+  useAutoRefresh(refresh, Boolean(email));
 
   useEffect(() => {
     if (!email) return;
@@ -39,6 +45,7 @@ export function useNotifications(email) {
           setError(data.message || "Could not load notifications.");
         } else {
           setNotifications(data.notifications);
+          setError("");
         }
       } catch {
         if (!ignore) setError("Unable to connect to the server.");
@@ -52,7 +59,7 @@ export function useNotifications(email) {
     return () => {
       ignore = true;
     };
-  }, [email]);
+  }, [email, reloadCount]);
 
   const markAsRead = useCallback(
     async (id) => {

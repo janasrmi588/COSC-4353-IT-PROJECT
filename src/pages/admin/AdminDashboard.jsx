@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchServices, updateService } from "../../data/servicesApi";
 import { fetchQueue } from "../../data/queueAPI";
 import { getStoredUser } from "../../data/useNotifications";
+import { useAutoRefresh } from "../../data/useAutoRefresh";
 import "./AdminDashboard.css";
 import "./QueueManagement.css";
 
@@ -15,6 +16,10 @@ export default function AdminDashboard() {
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState("");
   const [reloadCount, setReloadCount] = useState(0);
+
+  // Keep queue lengths current while an admin has the page open.
+  const refresh = useCallback(() => setReloadCount((n) => n + 1), []);
+  useAutoRefresh(refresh, Boolean(adminEmail));
 
   useEffect(() => {
     let ignore = false;
@@ -110,7 +115,9 @@ export default function AdminDashboard() {
                     <td>
                       <span
                         className={
-                          service.isOpen ? "admin-badge open" : "admin-badge closed"
+                          service.isOpen
+                            ? "admin-badge open"
+                            : "admin-badge closed"
                         }
                       >
                         {service.isOpen ? "Open" : "Closed"}
@@ -136,4 +143,3 @@ export default function AdminDashboard() {
     </main>
   );
 }
-
