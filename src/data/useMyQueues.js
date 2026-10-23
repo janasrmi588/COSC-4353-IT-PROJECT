@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchMyQueues } from "./queueAPI";
 import { fetchServices } from "./servicesApi";
 import { getDisplayStatus } from "./queueHelpers";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 // Loads the signed-in user's active queue entries plus the service list.
 //
@@ -11,6 +12,7 @@ import { getDisplayStatus } from "./queueHelpers";
 //   { entry, service, position, peopleAhead, estimatedWait, displayStatus }
 // where displayStatus is "waiting" or "almost ready".
 // Pass a falsy email (nobody logged in) and nothing is requested.
+// The data refreshes by itself every few seconds (see useAutoRefresh).
 function buildActive(entries, services) {
     return entries.map((entry) => {
         // If the service was deleted, still show the ticket with what we know.
@@ -39,6 +41,11 @@ export function useMyQueues(email) {
     const [active, setActive] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const [reloadCount, setReloadCount] = useState(0);
+    const loadedOnce = useRef(false);
+
+    const refresh = useCallback(() => setReloadCount((n) => n + 1), []);
+    useAutoRefresh(refresh, Boolean(email));
 
     useEffect(() => {
         if (!email) return;
@@ -53,12 +60,14 @@ export function useMyQueues(email) {
             if (ignore) return;
 
             const failed = [servicesResult, mineResult].find((r) => !r.ok);
-            if (failed) {
-                setError(failed.message);
-            } else {
+            if (!failed) {
                 setServices(servicesResult.services);
                 setActive(buildActive(mineResult.entries, servicesResult.services));
                 setError("");
+                loadedOnce.current = true;
+            } else if (!loadedOnce.current) {
+                // A failed refresh later on keeps showing the last good data.
+                setError(failed.message);
             }
             setLoading(false);
         }
@@ -67,7 +76,7 @@ export function useMyQueues(email) {
         return () => {
             ignore = true;
         };
-    }, [email]);
+    }, [email, reloadCount]);
 
     return { active, services, loading: Boolean(email) && loading, error };
 }

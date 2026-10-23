@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchServices } from "../../data/servicesApi";
 import { fetchQueue, serveNextUser } from "../../data/queueAPI";
 import { getStoredUser } from "../../data/useNotifications";
+import { useAutoRefresh } from "../../data/useAutoRefresh";
 import "./AdminDashboard.css";
 import "./QueueManagement.css";
 
@@ -73,6 +74,9 @@ export default function QueueManagement() {
   }, [adminEmail, selectedId, reloadCount]);
 
   const reload = useCallback(() => setReloadCount((n) => n + 1), []);
+
+  // Keep the queue current while an admin has the page open.
+  useAutoRefresh(reload, Boolean(adminEmail));
 
   async function handleServeNext() {
     setServing(true);
