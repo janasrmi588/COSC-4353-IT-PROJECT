@@ -26,3 +26,20 @@
   background: #fff;
   font-size: 14px;
 }
+
+.qm-message {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.qm-error {
+  background: #fdecec;
+  color: #9b1c1c;
+}
+
+.qm-success {
+  background: #e6f6ec;
+  color: #1c6b3a;
+}
