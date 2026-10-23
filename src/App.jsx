@@ -1,4 +1,10 @@
-import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Routes,
+  Route,
+} from "react-router-dom";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import History from "./pages/History";
@@ -8,9 +14,9 @@ import ServiceManagement from "./pages/admin/ServiceManagement";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import Dashboard from "./pages/Dashboard";
 import Register from "./pages/Register";
+import Navbar from "./components/Navbar";
 import { getStoredUser } from "./data/useNotifications";
 import "./App.css";
-
 
 function RequireAdmin({ children }) {
   const user = getStoredUser();
@@ -20,40 +26,53 @@ function RequireAdmin({ children }) {
   return children;
 }
 
+// Every page except login and register shows the navbar on top.
+function WithNavbar() {
+  return (
+    <>
+      <Navbar />
+      <Outlet />
+    </>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Login />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/queue-status" element={<QueueStatus />} />
-        <Route
-          path="/admin/queue"
-          element={
-            <RequireAdmin>
-              <QueueManagement />
-            </RequireAdmin>
-          }
-        />
-        <Route
-          path="/admin/dashboard"
-          element={
-            <RequireAdmin>
-              <AdminDashboard />
-            </RequireAdmin>
-          }
-        />
-        <Route
-          path="/admin/services"
-          element={
-            <RequireAdmin>
-              <ServiceManagement />
-            </RequireAdmin>
-          }
-        />
-        <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/register" element={<Register />} />
+
+        <Route element={<WithNavbar />}>
+          <Route path="/home" element={<Home />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/queue-status" element={<QueueStatus />} />
+          <Route
+            path="/admin/queue"
+            element={
+              <RequireAdmin>
+                <QueueManagement />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <RequireAdmin>
+                <AdminDashboard />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="/admin/services"
+            element={
+              <RequireAdmin>
+                <ServiceManagement />
+              </RequireAdmin>
+            }
+          />
+          <Route path="/dashboard" element={<Dashboard />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );
