@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchServices } from "../../data/servicesApi";
-import { fetchQueue, serveNextUser } from "../../data/queueApi";
+import { fetchQueue, serveNextUser } from "../../data/queueAPI";
 import { getStoredUser } from "../../data/useNotifications";
 import "./AdminDashboard.css";
 import "./QueueManagement.css";
