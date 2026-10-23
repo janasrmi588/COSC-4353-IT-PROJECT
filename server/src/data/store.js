@@ -68,3 +68,15 @@ export const services = [
     isOpen: false,
   },
 ];
+
+export const queueEntries = [
+  { id: 1, ticketNumber: "Q-1040", serviceId: 1, userEmail: "student2@example.com", status: "waiting", priority: "high", joinedAt: "2026-10-02T09:00:00.000Z", finishedAt: null },
+  { id: 2, ticketNumber: "Q-1041", serviceId: 1, userEmail: "faculty1@example.com", status: "waiting", priority: "high", joinedAt: "2026-10-02T09:04:00.000Z", finishedAt: null },
+  { id: 3, ticketNumber: "Q-1042", serviceId: 1, userEmail: "student@uh.edu", status: "waiting", priority: "high", joinedAt: "2026-10-02T09:08:00.000Z", finishedAt: null },
+  { id: 4, ticketNumber: "Q-1043", serviceId: 1, userEmail: "student3@example.com", status: "waiting", priority: "high", joinedAt: "2026-10-02T09:12:00.000Z", finishedAt: null },
+  { id: 5, ticketNumber: "Q-2010", serviceId: 2, userEmail: "student@uh.edu", status: "waiting", priority: "high", joinedAt: "2026-10-02T08:50:00.000Z", finishedAt: null },
+  { id: 6, ticketNumber: "Q-2011", serviceId: 2, userEmail: "student4@example.com", status: "waiting", priority: "high", joinedAt: "2026-10-02T08:55:00.000Z", finishedAt: null },
+  { id: 7, ticketNumber: "Q-3001", serviceId: 3, userEmail: "student5@example.com", status: "waiting", priority: "high", joinedAt: "2026-10-02T08:40:00.000Z", finishedAt: null },
+  { id: 8, ticketNumber: "Q-3000", serviceId: 3, userEmail: "student@uh.edu", status: "served", priority: "high", joinedAt: "2026-09-20T10:00:00.000Z", finishedAt: "2026-09-20T10:25:00.000Z" },
+  { id: 9, ticketNumber: "Q-1039", serviceId: 1, userEmail: "student@uh.edu", status: "canceled", priority: "high", joinedAt: "2026-09-22T14:00:00.000Z", finishedAt: "2026-09-22T14:06:00.000Z" },
+];

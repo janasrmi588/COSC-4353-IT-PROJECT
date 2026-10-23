@@ -1,28 +1,100 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { fetchServices } from "../data/servicesApi";
+import { fetchMyQueues, joinQueue, leaveQueue } from "../data/queueAPI";
+import { getStoredUser } from "../data/useNotifications";
 
 function Home() {
+  const user = getStoredUser();
+  const email = user?.role === "user" ? user.email : null;
+
   const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [priority, setPriority] = useState("Low");
+  const [serviceId, setServiceId] = useState("");
   const [description, setDescription] = useState("");
 
+  const [serviceList, setServiceList] = useState([]);
+  const [myEntries, setMyEntries] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [leavingId, setLeavingId] = useState(null);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [reloadCount, setReloadCount] = useState(0);
+
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!email) return;
+
+    let ignore = false;
+
+    async function load() {
+      const [servicesResult, mineResult] = await Promise.all([
+        fetchServices(),
+        fetchMyQueues(email),
+      ]);
+      if (ignore) return;
+
+      if (servicesResult.ok) setServiceList(servicesResult.services);
+      if (mineResult.ok) setMyEntries(mineResult.entries);
+
+      const failed = [servicesResult, mineResult].find((r) => !r.ok);
+      if (failed) setError(failed.message);
+    }
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [email, reloadCount]);
 
   const handleLogout = () => {
     sessionStorage.removeItem("user");
     navigate("/");
   };
 
-  const handleSubmit = (e) => {
+  // Submitting the form puts the user in line for the chosen service.
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    setNotice("");
 
-    alert("Ticket submitted!");
+    if (!email) {
+      setError("Please log in with a user account first.");
+      return;
+    }
 
+    setSubmitting(true);
+    const result = await joinQueue(email, Number(serviceId));
+    setSubmitting(false);
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    setNotice(
+      `You joined ${result.entry.serviceName}. Your ticket is ${result.entry.ticketNumber} (position #${result.entry.position}).`,
+    );
     setTitle("");
-    setCategory("");
-    setPriority("Low");
+    setServiceId("");
     setDescription("");
+    setReloadCount((n) => n + 1);
+  };
+
+  const handleLeave = async (entry) => {
+    setError("");
+    setNotice("");
+    setLeavingId(entry.id);
+
+    const result = await leaveQueue(email, entry.id);
+    if (result.ok) {
+      setNotice(`You left the ${entry.serviceName} queue.`);
+    } else {
+      setError(result.message);
+    }
+
+    setLeavingId(null);
+    setReloadCount((n) => n + 1);
   };
 
   return (
@@ -53,6 +125,9 @@ function Home() {
 
           <h2>Create a Ticket</h2>
 
+          {error && <p role="alert">{error}</p>}
+          {notice && <p role="status">{notice}</p>}
+
           <form onSubmit={handleSubmit}>
 
             <label>Issue Title</label>
@@ -64,19 +139,23 @@ function Home() {
               required
             />
 
-            <label>Issue Category</label>
+            <label>Service</label>
             <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
+              value={serviceId}
+              onChange={(e) => setServiceId(e.target.value)}
               required
             >
-              <option value="">Select a category</option>
-              <option value="Wi-Fi">Wi-Fi</option>
-              <option value="Account">Account / Login</option>
-              <option value="Email">Email</option>
-              <option value="Software">Software</option>
-              <option value="Hardware">Hardware</option>
-              <option value="Other">Other</option>
+              <option value="">Select a service</option>
+              {serviceList.map((service) => (
+                <option
+                  key={service.id}
+                  value={service.id}
+                  disabled={!service.isOpen}
+                >
+                  {service.name}
+                  {service.isOpen ? "" : " (closed)"}
+                </option>
+              ))}
             </select>
 
             <label>Description</label>
@@ -87,7 +166,9 @@ function Home() {
               required
             />
 
-            <button type="submit">Submit Ticket</button>
+            <button type="submit" disabled={submitting}>
+              {submitting ? "Joining..." : "Submit Ticket"}
+            </button>
 
           </form>
 
@@ -95,7 +176,28 @@ function Home() {
 
         <div className="my-tickets">
           <h2>My Tickets</h2>
-          <p>You currently have no open tickets.</p>
+          {myEntries.length === 0 ? (
+            <p>You currently have no open tickets.</p>
+          ) : (
+            <ul>
+              {myEntries.map((entry) => (
+                <li key={entry.id}>
+                  {entry.ticketNumber} · {entry.serviceName} · Position #
+                  {entry.position}
+                  {entry.position === 1
+                    ? " (you're next)"
+                    : ` · ~${entry.estimatedWait} min wait`}{" "}
+                  <button
+                    type="button"
+                    onClick={() => handleLeave(entry)}
+                    disabled={leavingId === entry.id}
+                  >
+                    Leave queue
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
       </main>

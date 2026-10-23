@@ -178,7 +178,12 @@ function Dashboard({
             <h2 id="services-title" className={styles.panelTitle}>
               Active services
             </h2>
-            <span className={styles.count}>{openServices.length} open</span>
+            <span className={styles.count}>
+              {openServices.length} open ·{" "}
+              <Link to="/queues" className={styles.link}>
+                Join a queue
+              </Link>
+            </span>
           </div>
 
           {openServices.length === 0 ? (
