@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import styles from "./History.module.css";
-import { getHistory } from "../data/queueHelpers";
-import { queueEntries, services, mockCurrentUser } from "../data/queueMockData";
+import { fetchHistory } from "../data/historyAPI";
+import { getStoredUser } from "../data/useNotifications";
 
 function formatDate(isoDate) {
   return new Date(isoDate + "T00:00:00").toLocaleDateString([], {
@@ -8,12 +9,33 @@ function formatDate(isoDate) {
   });
 }
 
-function History({
-  entries = queueEntries,
-  serviceList = services,
-  currentUser = mockCurrentUser,
-}) {
-  const rows = getHistory(entries, serviceList, currentUser.email);
+function History() {
+  const email = getStoredUser()?.email;
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function load() {
+      const result = await fetchHistory(email);
+      if (ignore) return;
+
+      if (result.ok) {
+        setRows(result.history);
+        setError("");
+      } else {
+        setError(result.message);
+      }
+      setLoading(false);
+    }
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, [email]);
 
   return (
     <main className={styles.page}>
@@ -22,7 +44,11 @@ function History({
         <p className={styles.subtitle}>Your past queue visits, newest first.</p>
       </header>
 
-      {rows.length === 0 ? (
+      {loading ? (
+        <p className={styles.empty}>Loading your history...</p>
+      ) : error ? (
+        <p className={styles.empty}>{error}</p>
+      ) : rows.length === 0 ? (
         <p className={styles.empty}>
           No history yet. Once a ticket is served or canceled, it will show up
           here.
