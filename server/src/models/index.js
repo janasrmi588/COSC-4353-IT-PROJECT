@@ -7,3 +7,4 @@ import "./Service.js";
 import "./Queue.js";
 import "./QueueEntry.js";
 import "./Notification.js";
+import "./Session.js";
