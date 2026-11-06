@@ -18,37 +18,40 @@ function sendResult(res, result, successBody) {
   return res.status(result.status).json(successBody(result));
 }
 
-router.get("/mine", (req, res) => {
-  const result = listMyQueues(req.query.email);
+// Express 5 passes a rejected promise from an async handler to the error handler.
+
+router.get("/mine", async (req, res) => {
+  const result = await listMyQueues(req.query.email);
   return sendResult(res, result, (r) => ({ entries: r.entries }));
 });
 
-router.post("/join", (req, res) => {
-  const result = joinQueue(req.query.email, req.body);
+router.post("/join", async (req, res) => {
+  const result = await joinQueue(req.query.email, req.body);
   return sendResult(res, result, (r) => ({
     message: "You joined the queue.",
     entry: r.entry,
   }));
 });
 
-router.post("/serve-next", (req, res) => {
-  const result = serveNext(req.query.email, req.body);
+router.post("/serve-next", async (req, res) => {
+  const result = await serveNext(req.query.email, req.body);
   return sendResult(res, result, (r) => ({
     message: "Next user served.",
     entry: r.entry,
   }));
 });
 
-router.post("/:id/leave", (req, res) => {
-  const result = leaveQueue(req.query.email, req.params.id);
+// The service checks that :id is a valid ObjectId and answers 400 if not.
+router.post("/:id/leave", async (req, res) => {
+  const result = await leaveQueue(req.query.email, req.params.id);
   return sendResult(res, result, (r) => ({
     message: "You left the queue.",
     entry: r.entry,
   }));
 });
 
-router.get("/", (req, res) => {
-  const result = viewQueue(req.query.email, req.query.serviceId);
+router.get("/", async (req, res) => {
+  const result = await viewQueue(req.query.email, req.query.serviceId);
   return sendResult(res, result, (r) => ({
     serviceId: r.serviceId,
     queue: r.queue,
@@ -56,3 +59,4 @@ router.get("/", (req, res) => {
 });
 
 export default router;
+
