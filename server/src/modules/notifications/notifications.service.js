@@ -1,38 +1,76 @@
-// Notification module, logic: trigger a notification when a user joins a queue and when a user
-// is close to being served. Notifications may be logged or returned to the front end (no real email/SMS).
-import { notifications } from "../../data/store.js";
-export const NOTIFICATION_TYPES = ["status", "queue"];
-export const MESSAGE_MAX_LENGTH = 500;
+import mongoose from "mongoose";
+import Notification, {
+  MESSAGE_MAX_LENGTH,
+  NOTIFICATION_TYPES,
+} from "../../models/Notification.js";
+
+export { MESSAGE_MAX_LENGTH, NOTIFICATION_TYPES };
 export const EMAIL_MAX_LENGTH = 254;
 
 export const ALMOST_READY_POSITION = 2;
 
-function fail(status, message) {
-  return { success: false, status, message };
+function isValidId(value) {
+  return typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value);
+}
+
+function requireModel(name) {
+  const model = mongoose.models[name];
+  if (!model) {
+    throw new Error(
+      `The ${name} model is not registered. Import its model file before handling requests.`,
+    );
+  }
+  return model;
+}
+
+async function findUserByEmail(email) {
+  const wanted = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!wanted) return null;
+
+  return requireModel("UserCredentials")
+    .findOne({ email: wanted })
+    .select("_id email role")
+    .lean();
 }
 
 function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
-function nextNotificationId() {
-  return Math.max(0, ...notifications.map((n) => n.id)) + 1;
+function fail(status, message) {
+  return { success: false, status, message };
 }
 
-export function createNotification({
-  userEmail,
+function idText(value) {
+  return value === null || value === undefined ? value : String(value);
+}
+
+export function toApiNotification(doc) {
+  return {
+    id: String(doc._id),
+    entryId: doc.entryId ? String(doc.entryId) : null,
+    type: doc.type,
+    message: doc.message,
+    read: doc.status === "viewed",
+    createdAt: new Date(doc.createdAt).toISOString(),
+  };
+}
+
+export async function createNotification({
+  userId,
   entryId = null,
   type = "status",
   message,
 } = {}) {
-  const email = normalizeEmail(userEmail);
+  const user = idText(userId);
+  const entry = idText(entryId);
   const text = typeof message === "string" ? message.trim() : "";
 
-  if (!email) {
-    return fail(400, "A user email is required.");
+  if (!user) {
+    return fail(400, "A user is required.");
   }
-  if (email.length > EMAIL_MAX_LENGTH) {
-    return fail(400, `Email must be ${EMAIL_MAX_LENGTH} characters or fewer.`);
+  if (!isValidId(user)) {
+    return fail(400, "userId is not a valid id.");
   }
   if (typeof message !== "string" || !text) {
     return fail(400, "A notification message is required.");
@@ -46,90 +84,119 @@ export function createNotification({
   if (!NOTIFICATION_TYPES.includes(type)) {
     return fail(400, `Type must be one of: ${NOTIFICATION_TYPES.join(", ")}.`);
   }
-  if (entryId !== null && !Number.isInteger(entryId)) {
-    return fail(400, "entryId must be a whole number or null.");
+  if (entry !== null && entry !== undefined && !isValidId(entry)) {
+    return fail(400, "entryId must be a valid id or null.");
   }
 
-  const notification = {
-    id: nextNotificationId(),
-    userEmail: email,
-    entryId,
-    type,
-    message: text,
-    read: false,
-    createdAt: new Date().toISOString(),
-  };
+  try {
+    const doc = await Notification.create({
+      userId: user,
+      entryId: entry ?? null,
+      type,
+      message: text,
+    });
+    console.log(`[notification -> ${user}] ${text}`);
 
-  notifications.push(notification);
-  console.log(`[notification -> ${email}] ${text}`);
-
-  return { success: true, status: 201, notification };
+    return { success: true, status: 201, notification: toApiNotification(doc) };
+  } catch (error) {
+    console.error("[notifications] could not save a notification:", error);
+    return fail(500, "Could not save the notification.");
+  }
 }
 
-export function notifyJoinedQueue({ userEmail, entryId = null, serviceName }) {
+export function notifyJoinedQueue({ userId, entryId = null, serviceName }) {
   return createNotification({
-    userEmail,
+    userId,
     entryId,
     type: "queue",
     message: `You joined the ${serviceName} queue.`,
   });
 }
 
-export function notifyAlmostReady({ userEmail, entryId = null, serviceName }) {
-  const email = normalizeEmail(userEmail);
+export async function notifyAlmostReady({
+  userId,
+  entryId = null,
+  serviceName,
+}) {
   const message = `You are almost up for ${serviceName}.`;
+  const user = idText(userId);
+  const entry = idText(entryId);
 
-  const alreadySent = notifications.some(
-    (n) =>
-      n.userEmail === email &&
-      n.type === "status" &&
-      n.entryId === entryId &&
-      n.message === message,
-  );
-  if (entryId !== null && alreadySent) {
-    return { success: true, status: 200, duplicate: true };
+  if (entry && isValidId(user) && isValidId(entry)) {
+    try {
+      const alreadySent = await Notification.exists({
+        userId: user,
+        type: "status",
+        entryId: entry,
+        message,
+      });
+      if (alreadySent) {
+        return { success: true, status: 200, duplicate: true };
+      }
+    } catch (error) {
+      console.error("[notifications] could not check for a duplicate:", error);
+      return fail(500, "Could not save the notification.");
+    }
   }
 
-  return createNotification({ userEmail, entryId, type: "status", message });
+  return createNotification({ userId, entryId, type: "status", message });
 }
 
-export function listNotifications(userEmail, { unreadOnly = false } = {}) {
+export async function listNotifications(
+  userEmail,
+  { unreadOnly = false } = {},
+) {
   const email = normalizeEmail(userEmail);
   if (!email) {
     return fail(400, "A user email is required.");
   }
+  if (email.length > EMAIL_MAX_LENGTH) {
+    return fail(400, `Email must be ${EMAIL_MAX_LENGTH} characters or fewer.`);
+  }
 
-  const mine = notifications
-    .filter((n) => n.userEmail === email && (!unreadOnly || !n.read))
-    .sort((a, b) => {
-      const byTime = new Date(b.createdAt) - new Date(a.createdAt);
-      return byTime !== 0 ? byTime : b.id - a.id;
-    });
+  const user = await findUserByEmail(email);
+  if (!user) {
+    return { success: true, status: 200, notifications: [], unreadCount: 0 };
+  }
+
+  const filter = { userId: user._id };
+  if (unreadOnly) filter.status = "sent";
+
+  const docs = await Notification.find(filter)
+    .sort({ createdAt: -1, _id: -1 })
+    .lean();
+  const notifications = docs.map(toApiNotification);
 
   return {
     success: true,
     status: 200,
-    notifications: mine,
-    unreadCount: mine.filter((n) => !n.read).length,
+    notifications,
+    unreadCount: notifications.filter((n) => !n.read).length,
   };
 }
 
-export function markNotificationRead(userEmail, id) {
+export async function markNotificationRead(userEmail, id) {
   const email = normalizeEmail(userEmail);
   if (!email) {
     return fail(400, "A user email is required.");
   }
-  if (!Number.isInteger(id) || id < 1) {
-    return fail(400, "Notification id must be a positive whole number.");
+  if (!isValidId(id)) {
+    return fail(400, "Notification id is not valid.");
   }
 
-  const notification = notifications.find(
-    (n) => n.id === id && n.userEmail === email,
-  );
-  if (!notification) {
+  const user = await findUserByEmail(email);
+  if (!user) {
     return fail(404, "Notification not found.");
   }
 
-  notification.read = true;
-  return { success: true, status: 200, notification };
+  const doc = await Notification.findOneAndUpdate(
+    { _id: id, userId: user._id },
+    { status: "viewed" },
+    { returnDocument: "after" },
+  ).lean();
+  if (!doc) {
+    return fail(404, "Notification not found.");
+  }
+
+  return { success: true, status: 200, notification: toApiNotification(doc) };
 }
