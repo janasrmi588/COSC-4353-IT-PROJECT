@@ -28,11 +28,11 @@ export function fetchMyQueues(userEmail) {
   return request(`${API_URL}/mine${withEmail(userEmail)}`);
 }
 
-export function joinQueue(userEmail, serviceId) {
+export function joinQueue(userEmail, serviceId, title, description) {
   return request(`${API_URL}/join${withEmail(userEmail)}`, {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ serviceId }),
+    body: JSON.stringify({ serviceId, title, description }),
   });
 }
 

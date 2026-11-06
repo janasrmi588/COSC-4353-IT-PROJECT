@@ -68,7 +68,7 @@ function Home() {
     }
 
     setSubmitting(true);
-    const result = await joinQueue(email, Number(serviceId));
+    const result = await joinQueue(email, serviceId, title, description);
     setSubmitting(false);
 
     if (!result.ok) {
