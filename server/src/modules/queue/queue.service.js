@@ -1,4 +1,7 @@
-import { queueEntries, services, users } from "../../data/store.js";
+import Queue from "../../models/Queue.js";
+import QueueEntry from "../../models/QueueEntry.js";
+import Service from "../../models/Service.js";
+import UserCredentials from "../../models/UserCredentials.js";
 import {
   ALMOST_READY_POSITION,
   createNotification,
@@ -8,8 +11,16 @@ import {
 import { estimateWait } from "../waitTime/waitTime.service.js";
 
 export const ENTRY_STATUSES = ["waiting", "served", "canceled"];
+export const TITLE_MAX_LENGTH = 150;
+export const DESCRIPTION_MAX_LENGTH = 2000;
 
 const PRIORITY_RANK = { high: 3, medium: 2, low: 1 };
+
+// How many times serveNext retries after losing a race to another admin.
+const MAX_SERVE_ATTEMPTS = 5;
+
+const BAD_SERVICE_ID = "Service id is not valid.";
+const BAD_ENTRY_ID = "Queue entry id is not valid.";
 
 function fail(status, message, details) {
   const result = { success: false, status, message };
@@ -21,24 +32,29 @@ function normalizeEmail(email) {
   return typeof email === "string" ? email.trim().toLowerCase() : "";
 }
 
-function toPositiveInt(value) {
-  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
-    return value;
-  }
-  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
-    return Number(value);
-  }
-  return NaN;
+// Ids are Mongo ObjectIds now: exactly 24 hex characters, sent as text.
+function isValidId(value) {
+  return typeof value === "string" && /^[0-9a-fA-F]{24}$/.test(value);
+}
+
+// Small private lookup (same as the one in services.service.js).
+// TODO: swap for Joice's findUserByEmail once it is merged.
+async function findUserByEmail(email) {
+  const wanted = normalizeEmail(email);
+  if (!wanted) return null;
+
+  return UserCredentials.findOne({ email: wanted })
+    .select("_id email role")
+    .lean();
 }
 
 // Look up who is calling. `role` is "user" or "administrator".
-function checkRole(email, role) {
-  const wanted = normalizeEmail(email);
-  if (!wanted) {
+async function checkRole(email, role) {
+  if (!normalizeEmail(email)) {
     return fail(401, "Please log in first.");
   }
 
-  const user = users.find((u) => u.email.toLowerCase() === wanted);
+  const user = await findUserByEmail(email);
   if (!user) {
     return fail(401, "Please log in first.");
   }
@@ -55,186 +71,309 @@ function checkRole(email, role) {
   return { user };
 }
 
-function getService(serviceId) {
-  return services.find((s) => s.id === serviceId);
-}
-
 // ---------- ordering ----------
 
+function compareIds(a, b) {
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  const x = String(a);
+  const y = String(b);
+  if (x < y) return -1;
+  return x > y ? 1 : 0;
+}
+
+// Priority (high, medium, low), then sortOrder, then arrival, then id.
 export function compareEntries(a, b) {
   const byPriority =
     (PRIORITY_RANK[b.priority] ?? 0) - (PRIORITY_RANK[a.priority] ?? 0);
   if (byPriority !== 0) return byPriority;
 
+  if (Number.isFinite(a.sortOrder) && Number.isFinite(b.sortOrder)) {
+    const bySortOrder = a.sortOrder - b.sortOrder;
+    if (bySortOrder !== 0) return bySortOrder;
+  }
+
   const byArrival = new Date(a.joinedAt) - new Date(b.joinedAt);
   if (byArrival !== 0) return byArrival;
 
-  return a.id - b.id;
+  return compareIds(a.id, b.id);
+}
+
+// Plain-object copy of a QueueEntry with string ids. `userId` stays on it for
+// notifications and is removed again in describeEntry.
+function toEntryView(doc) {
+  return {
+    id: String(doc._id),
+    ticketNumber: doc.ticketNumber,
+    serviceId: String(doc.serviceId),
+    serviceName: doc.serviceName,
+    userId: String(doc.userId),
+    userEmail: doc.userEmail,
+    title: doc.title,
+    description: doc.description,
+    status: doc.status,
+    priority: doc.priority,
+    sortOrder: doc.sortOrder,
+    joinedAt: new Date(doc.joinedAt).toISOString(),
+    finishedAt: doc.finishedAt ? new Date(doc.finishedAt).toISOString() : null,
+  };
 }
 
 // Everyone currently waiting, in the order they will be served.
 // Pass a serviceId to get just that service's line.
-export function getWaitingEntries(serviceId = null) {
-  return queueEntries
-    .filter(
-      (e) =>
-        e.status === "waiting" && (serviceId === null || e.serviceId === serviceId),
-    )
-    .sort(compareEntries);
+export async function getWaitingEntries(serviceId = null) {
+  const filter = { status: "waiting" };
+  if (serviceId !== null) filter.serviceId = serviceId;
+
+  const docs = await QueueEntry.find(filter).lean();
+  return docs.map(toEntryView).sort(compareEntries);
 }
 
-// What the front end gets for one waiting entry. `position` is 1-based inside
-// that service's line.
-function describeEntry(entry, line, index) {
-  const service = getService(entry.serviceId);
+// The { id, expectedDuration } list estimateWait needs for these entries.
+async function loadServiceList(line) {
+  const ids = [...new Set(line.map((entry) => entry.serviceId))];
+  if (ids.length === 0) return [];
+
+  const docs = await Service.find({ _id: { $in: ids } })
+    .select("expectedDuration")
+    .lean();
+  return docs.map((doc) => ({
+    id: String(doc._id),
+    expectedDuration: doc.expectedDuration,
+  }));
+}
+
+// What the front end gets for one entry. `position` is 1-based inside `line`.
+// Pass index -1 for entries that are no longer waiting.
+function describeEntry(entry, line, index, serviceList = []) {
+  const { userId, ...rest } = entry;
   const position = index === -1 ? null : index + 1;
 
   return {
-    ...entry,
-    serviceName: service ? service.name : "Unknown service",
+    ...rest,
     position,
     peopleAhead: position === null ? 0 : position - 1,
-    estimatedWait: position === null ? 0 : estimateWait(line, index),
+    estimatedWait:
+      position === null ? 0 : estimateWait(line, index, serviceList),
   };
 }
 
-function nextEntryId() {
-  return Math.max(0, ...queueEntries.map((e) => e.id)) + 1;
-}
-
-// Tickets look like Q-1042: the service id followed by a counter for that service.
-function nextTicketNumber(serviceId) {
-  let highest = serviceId * 1000;
-  for (const entry of queueEntries) {
-    if (entry.serviceId !== serviceId) continue;
-    const n = Number(String(entry.ticketNumber).replace(/^Q-/, ""));
-    if (Number.isInteger(n) && n > highest) highest = n;
-  }
-  return `Q-${highest + 1}`;
-}
-
 // Anyone now at the front of a line gets a one-time "almost up" notification.
-function notifyFrontOfLine(serviceId) {
-  const service = getService(serviceId);
-  if (!service) return;
-
-  getWaitingEntries(serviceId)
-    .slice(0, ALMOST_READY_POSITION)
-    .forEach((entry) => {
-      notifyAlmostReady({
-        userEmail: entry.userEmail,
-        entryId: entry.id,
-        serviceName: service.name,
-      });
+async function notifyFrontOfLine(line) {
+  for (const entry of line.slice(0, ALMOST_READY_POSITION)) {
+    await notifyAlmostReady({
+      userId: entry.userId,
+      entryId: entry.id,
+      serviceName: entry.serviceName,
     });
+  }
+}
+
+// ---------- input checks ----------
+
+function checkText(errors, field, label, value, maxLength) {
+  if (value === undefined || value === null) {
+    errors[field] = `${label} is required.`;
+    return null;
+  }
+  if (typeof value !== "string") {
+    errors[field] = `${label} must be text.`;
+    return null;
+  }
+
+  const text = value.trim();
+  if (!text) {
+    errors[field] = `${label} is required.`;
+  } else if (text.length > maxLength) {
+    errors[field] = `${label} must be ${maxLength} characters or fewer.`;
+  }
+  return text;
+}
+
+// Reads the optional serviceId filter used by the administrator calls.
+// Returns { serviceId } (null for "all services") or { error }.
+async function readServiceFilter(input) {
+  if (input === undefined || input === null || input === "") {
+    return { serviceId: null };
+  }
+  if (!isValidId(input)) {
+    return { error: fail(400, BAD_SERVICE_ID) };
+  }
+  if (!(await Service.exists({ _id: input }))) {
+    return { error: fail(404, "Service not found.") };
+  }
+  return { serviceId: input };
 }
 
 // ---------- users: join / leave / see my queues ----------
 
-export function joinQueue(userEmail, body) {
-  const denied = checkRole(userEmail, "user");
+export async function joinQueue(userEmail, body) {
+  const denied = await checkRole(userEmail, "user");
   if (denied.success === false) return denied;
+  const { user } = denied;
 
   const data =
     body && typeof body === "object" && !Array.isArray(body) ? body : {};
-  const serviceId = toPositiveInt(data.serviceId);
-  if (Number.isNaN(serviceId)) {
-    return fail(400, "Please choose a service.", {
-      serviceId: "A service is required.",
-    });
+
+  const errors = {};
+  if (!isValidId(data.serviceId)) {
+    errors.serviceId = "A service is required.";
+  }
+  const title = checkText(errors, "title", "Title", data.title, TITLE_MAX_LENGTH);
+  const description = checkText(
+    errors,
+    "description",
+    "Description",
+    data.description,
+    DESCRIPTION_MAX_LENGTH,
+  );
+  if (Object.keys(errors).length > 0) {
+    const onlyService =
+      Object.keys(errors).length === 1 && errors.serviceId !== undefined;
+    return fail(
+      400,
+      onlyService ? "Please choose a service." : "Please fix the highlighted fields.",
+      errors,
+    );
   }
 
-  const service = getService(serviceId);
+  const service = await Service.findById(data.serviceId).lean();
   if (!service) {
     return fail(404, "Service not found.");
   }
-  if (!service.isOpen) {
+
+  const queue = await Queue.findOne({ serviceId: service._id }).lean();
+  if (!queue || queue.status !== "open") {
     return fail(409, `${service.name} is closed right now.`);
   }
 
-  const email = normalizeEmail(userEmail);
-  const alreadyWaiting = queueEntries.some(
-    (e) =>
-      e.status === "waiting" &&
-      e.serviceId === serviceId &&
-      e.userEmail === email,
-  );
-  if (alreadyWaiting) {
-    return fail(409, `You are already in the ${service.name} queue.`);
+  const alreadyInQueue = () =>
+    fail(409, `You are already in the ${service.name} queue.`);
+
+  // Checked up front so a repeat click does not use up a ticket number. The
+  // partial unique index below is what actually enforces it.
+  if (
+    await QueueEntry.exists({
+      userId: user._id,
+      queueId: queue._id,
+      status: "waiting",
+    })
+  ) {
+    return alreadyInQueue();
   }
 
-  const entry = {
-    id: nextEntryId(),
-    ticketNumber: nextTicketNumber(serviceId),
-    serviceId,
-    userEmail: email,
-    status: "waiting",
-    priority: service.priority,
-    joinedAt: new Date().toISOString(),
-    finishedAt: null,
-  };
-  queueEntries.push(entry);
+  // Atomic, so two people joining at once never get the same number. The
+  // status filter also catches a queue that was closed a moment ago.
+  const counted = await Queue.findOneAndUpdate(
+    { _id: queue._id, status: "open" },
+    { $inc: { ticketCounter: 1 } },
+    { returnDocument: "after" },
+  ).lean();
+  if (!counted) {
+    return fail(409, `${service.name} is closed right now.`);
+  }
 
-  notifyJoinedQueue({
-    userEmail: email,
+  let doc;
+  try {
+    doc = await QueueEntry.create({
+      userId: user._id,
+      userEmail: normalizeEmail(userEmail),
+      queueId: queue._id,
+      serviceId: service._id,
+      serviceName: service.name,
+      priority: service.priority,
+      title,
+      description,
+      ticketNumber: `Q-${counted.ticketCounter}`,
+    });
+  } catch (error) {
+    // Two joins from the same user at the same moment: the partial unique
+    // index lets only one through.
+    if (error?.code === 11000 && !error.keyPattern?.ticketNumber) {
+      return alreadyInQueue();
+    }
+    throw error;
+  }
+
+  const entry = toEntryView(doc.toObject());
+
+  await notifyJoinedQueue({
+    userId: entry.userId,
     entryId: entry.id,
-    serviceName: service.name,
+    serviceName: entry.serviceName,
   });
 
+  const line = await getWaitingEntries(entry.serviceId);
   // Someone who joins straight into the first spots is already almost up.
-  notifyFrontOfLine(serviceId);
+  await notifyFrontOfLine(line);
 
-  const line = getWaitingEntries(serviceId);
   const index = line.findIndex((e) => e.id === entry.id);
+  const serviceList = await loadServiceList(line);
 
-  return { success: true, status: 201, entry: describeEntry(entry, line, index) };
+  return {
+    success: true,
+    status: 201,
+    entry: describeEntry(entry, line, index, serviceList),
+  };
 }
 
-export function leaveQueue(userEmail, entryId) {
-  const denied = checkRole(userEmail, "user");
+export async function leaveQueue(userEmail, entryId) {
+  const denied = await checkRole(userEmail, "user");
   if (denied.success === false) return denied;
+  const { user } = denied;
 
-  const id = toPositiveInt(entryId);
-  if (Number.isNaN(id)) {
-    return fail(400, "Queue entry id must be a positive whole number.");
+  if (!isValidId(entryId)) {
+    return fail(400, BAD_ENTRY_ID);
   }
 
-  const email = normalizeEmail(userEmail);
-  const entry = queueEntries.find((e) => e.id === id && e.userEmail === email);
-  if (!entry) {
-    return fail(404, "Queue entry not found.");
-  }
-  if (entry.status !== "waiting") {
-    return fail(409, "You are no longer waiting in this queue.");
+  // One atomic update, so leaving twice cannot cancel the entry twice.
+  const doc = await QueueEntry.findOneAndUpdate(
+    { _id: entryId, userId: user._id, status: "waiting" },
+    { status: "canceled", finishedAt: new Date() },
+    { returnDocument: "after" },
+  ).lean();
+
+  if (!doc) {
+    const theirs = await QueueEntry.exists({ _id: entryId, userId: user._id });
+    return theirs
+      ? fail(409, "You are no longer waiting in this queue.")
+      : fail(404, "Queue entry not found.");
   }
 
-  entry.status = "canceled";
-  entry.finishedAt = new Date().toISOString();
+  const entry = toEntryView(doc);
 
   // People behind the one who left may have moved up.
-  notifyFrontOfLine(entry.serviceId);
+  await notifyFrontOfLine(await getWaitingEntries(entry.serviceId));
 
   return { success: true, status: 200, entry: describeEntry(entry, [], -1) };
 }
 
 // The queues this user is currently waiting in, with position and wait.
-export function listMyQueues(userEmail) {
-  const denied = checkRole(userEmail, "user");
+export async function listMyQueues(userEmail) {
+  const denied = await checkRole(userEmail, "user");
   if (denied.success === false) return denied;
+  const { user } = denied;
 
-  const email = normalizeEmail(userEmail);
+  const mine = await QueueEntry.find({
+    userId: user._id,
+    status: "waiting",
+  }).lean();
+  const serviceIds = [...new Set(mine.map((e) => String(e.serviceId)))];
+
   const entries = [];
+  for (const serviceId of serviceIds) {
+    const line = await getWaitingEntries(serviceId);
+    const serviceList = await loadServiceList(line);
 
-  for (const service of services) {
-    const line = getWaitingEntries(service.id);
     line.forEach((entry, index) => {
-      if (entry.userEmail === email) {
-        entries.push(describeEntry(entry, line, index));
+      if (entry.userId === String(user._id)) {
+        entries.push(describeEntry(entry, line, index, serviceList));
       }
     });
   }
 
-  entries.sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt));
+  entries.sort(
+    (a, b) => new Date(a.joinedAt) - new Date(b.joinedAt) || compareIds(a.id, b.id),
+  );
   return { success: true, status: 200, entries };
 }
 
@@ -242,73 +381,67 @@ export function listMyQueues(userEmail) {
 
 // Current queue. With a serviceId it is that service's line; without one it is
 // every waiting user in one list (priority first, then arrival).
-export function viewQueue(adminEmail, serviceIdInput) {
-  const denied = checkRole(adminEmail, "administrator");
+export async function viewQueue(adminEmail, serviceIdInput) {
+  const denied = await checkRole(adminEmail, "administrator");
   if (denied.success === false) return denied;
 
-  let serviceId = null;
-  if (serviceIdInput !== undefined && serviceIdInput !== "") {
-    serviceId = toPositiveInt(serviceIdInput);
-    if (Number.isNaN(serviceId)) {
-      return fail(400, "Service id must be a positive whole number.");
-    }
-    if (!getService(serviceId)) {
-      return fail(404, "Service not found.");
-    }
-  }
+  const { serviceId, error } = await readServiceFilter(serviceIdInput);
+  if (error) return error;
 
-  const line = getWaitingEntries(serviceId);
-  const queue = line.map((entry, index) => ({
-    ...describeEntry(entry, line, index),
-  }));
+  const line = await getWaitingEntries(serviceId);
+  const serviceList = await loadServiceList(line);
+  const queue = line.map((entry, index) =>
+    describeEntry(entry, line, index, serviceList),
+  );
 
   return { success: true, status: 200, serviceId, queue };
 }
 
 // Serve the user at the front of the line. Without a serviceId, serves the
 // front of the combined queue (highest priority, then longest waiting).
-export function serveNext(adminEmail, body) {
-  const denied = checkRole(adminEmail, "administrator");
+export async function serveNext(adminEmail, body) {
+  const denied = await checkRole(adminEmail, "administrator");
   if (denied.success === false) return denied;
+  const { user: admin } = denied;
 
   const data =
     body && typeof body === "object" && !Array.isArray(body) ? body : {};
 
-  let serviceId = null;
-  if (
-    data.serviceId !== undefined &&
-    data.serviceId !== null &&
-    data.serviceId !== ""
-  ) {
-    serviceId = toPositiveInt(data.serviceId);
-    if (Number.isNaN(serviceId)) {
-      return fail(400, "Service id must be a positive whole number.");
+  const { serviceId, error } = await readServiceFilter(data.serviceId);
+  if (error) return error;
+
+  // Two admins can pick the same person at the same moment. Whoever's update
+  // still finds the entry "waiting" wins; the other moves on to the next one.
+  let claimed = null;
+  for (let attempt = 0; attempt < MAX_SERVE_ATTEMPTS && !claimed; attempt++) {
+    const line = await getWaitingEntries(serviceId);
+    if (line.length === 0) {
+      return fail(404, "Nobody is waiting in this queue.");
     }
-    if (!getService(serviceId)) {
-      return fail(404, "Service not found.");
+
+    for (const candidate of line) {
+      claimed = await QueueEntry.findOneAndUpdate(
+        { _id: candidate.id, status: "waiting" },
+        { status: "served", finishedAt: new Date(), servedBy: admin._id },
+        { returnDocument: "after" },
+      ).lean();
+      if (claimed) break;
     }
   }
 
-  const [next] = getWaitingEntries(serviceId);
-  if (!next) {
-    return fail(404, "Nobody is waiting in this queue.");
+  if (!claimed) {
+    return fail(409, "The queue is busy. Please try again.");
   }
 
-  next.status = "served";
-  next.finishedAt = new Date().toISOString();
-  next.servedBy = normalizeEmail(adminEmail);
+  const entry = toEntryView(claimed);
 
-  const service = getService(next.serviceId);
-  const serviceName = service ? service.name : "your service";
-
-  createNotification({
-    userEmail: next.userEmail,
-    entryId: next.id,
+  await createNotification({
+    userId: entry.userId,
+    entryId: entry.id,
     type: "status",
-    message: `It's your turn for ${serviceName}. Please head to the help desk.`,
+    message: `It's your turn for ${entry.serviceName}. Please head to the help desk.`,
   });
-  notifyFrontOfLine(next.serviceId);
+  await notifyFrontOfLine(await getWaitingEntries(entry.serviceId));
 
-  return { success: true, status: 200, entry: describeEntry(next, [], -1) };
+  return { success: true, status: 200, entry: describeEntry(entry, [], -1) };
 }
-
