@@ -19,6 +19,11 @@ const queueSchema = new mongoose.Schema(
       default: "open",
       required: true,
     },
+        ticketCounter: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
   },
   { timestamps: true },
 );
