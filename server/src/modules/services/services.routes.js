@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import {
   createService,
   deleteService,
@@ -17,33 +18,37 @@ function sendResult(res, result, successBody) {
   return res.status(result.status).json(successBody(result));
 }
 
-router.get("/", (req, res) => {
-  const result = listServices();
+function badId(req, res) {
+  if (mongoose.isValidObjectId(req.params.id)) return false;
+  res.status(400).json({ message: "Service id is not valid." });
+  return true;
+}
+
+router.get("/", async (req, res) => {
+  const result = await listServices();
   return sendResult(res, result, (r) => ({ services: r.services }));
 });
 
-router.post("/", (req, res) => {
-  const result = createService(req.query.email, req.body);
+router.post("/", async (req, res) => {
+  const result = await createService(req.query.email, req.body);
   return sendResult(res, result, (r) => ({
     message: "Service created.",
     service: r.service,
   }));
 });
 
-router.put("/:id", (req, res) => {
-  const id = /^[1-9]\d*$/.test(req.params.id) ? Number(req.params.id) : NaN;
-
-  const result = updateService(req.query.email, id, req.body);
+router.put("/:id", async (req, res) => {
+  if (badId(req, res)) return;
+  const result = await updateService(req.query.email, req.params.id, req.body);
   return sendResult(res, result, (r) => ({
     message: "Service updated.",
     service: r.service,
   }));
 });
 
-router.delete("/:id", (req, res) => {
-  const id = /^[1-9]\d*$/.test(req.params.id) ? Number(req.params.id) : NaN;
-
-  const result = deleteService(req.query.email, id);
+router.delete("/:id", async (req, res) => {
+  if (badId(req, res)) return;
+  const result = await deleteService(req.query.email, req.params.id);
   return sendResult(res, result, (r) => ({
     message: "Service deleted.",
     service: r.service,
