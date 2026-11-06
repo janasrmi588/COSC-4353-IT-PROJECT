@@ -32,12 +32,13 @@ const queueEntrySchema = new mongoose.Schema({
   userEmail: {
     type: String,
     required: true,
+    lowercase: true,
+    trim: true,
   },
 
   ticketNumber: {
     type: String,
     required: true,
-    unique: true,
   },
 
   title: {
@@ -85,8 +86,8 @@ const queueEntrySchema = new mongoose.Schema({
   },
 
   servedBy: {
-    type: String,
-    default: null,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "UserCredentials",
   },
 });
 
@@ -99,6 +100,9 @@ queueEntrySchema.index(
     partialFilterExpression: { status: "waiting" },
   },
 );
+
+// The same ticket number may exist in different queues, but never twice in one.
+queueEntrySchema.index({ queueId: 1, ticketNumber: 1 }, { unique: true });
 
 queueEntrySchema.index({
   queueId: 1,
