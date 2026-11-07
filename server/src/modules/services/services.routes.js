@@ -30,7 +30,7 @@ router.get("/", async (req, res) => {
 });
 
 router.post("/", async (req, res) => {
-  const result = await createService(req.query.email, req.body);
+  const result = await createService(req.user.email, req.body);
   return sendResult(res, result, (r) => ({
     message: "Service created.",
     service: r.service,
@@ -39,7 +39,7 @@ router.post("/", async (req, res) => {
 
 router.put("/:id", async (req, res) => {
   if (badId(req, res)) return;
-  const result = await updateService(req.query.email, req.params.id, req.body);
+  const result = await updateService(req.user.email, req.params.id, req.body);
   return sendResult(res, result, (r) => ({
     message: "Service updated.",
     service: r.service,
@@ -48,7 +48,7 @@ router.put("/:id", async (req, res) => {
 
 router.delete("/:id", async (req, res) => {
   if (badId(req, res)) return;
-  const result = await deleteService(req.query.email, req.params.id);
+  const result = await deleteService(req.user.email, req.params.id);
   return sendResult(res, result, (r) => ({
     message: "Service deleted.",
     service: r.service,

@@ -26,7 +26,7 @@ router.get("/mine", async (req, res) => {
 });
 
 router.post("/join", async (req, res) => {
-  const result = await joinQueue(req.query.email, req.body);
+  const result = await joinQueue(req.user.email, req.body);
   return sendResult(res, result, (r) => ({
     message: "You joined the queue.",
     entry: r.entry,
@@ -34,7 +34,7 @@ router.post("/join", async (req, res) => {
 });
 
 router.post("/serve-next", async (req, res) => {
-  const result = await serveNext(req.query.email, req.body);
+  const result = await serveNext(req.user.email, req.body);
   return sendResult(res, result, (r) => ({
     message: "Next user served.",
     entry: r.entry,
@@ -43,7 +43,7 @@ router.post("/serve-next", async (req, res) => {
 
 // The service checks that :id is a valid ObjectId and answers 400 if not.
 router.post("/:id/leave", async (req, res) => {
-  const result = await leaveQueue(req.query.email, req.params.id);
+  const result = await leaveQueue(req.user.email, req.params.id);
   return sendResult(res, result, (r) => ({
     message: "You left the queue.",
     entry: r.entry,
@@ -51,7 +51,7 @@ router.post("/:id/leave", async (req, res) => {
 });
 
 router.get("/", async (req, res) => {
-  const result = await viewQueue(req.query.email, req.query.serviceId);
+  const result = await viewQueue(req.user.email, req.query.serviceId);
   return sendResult(res, result, (r) => ({
     serviceId: r.serviceId,
     queue: r.queue,
