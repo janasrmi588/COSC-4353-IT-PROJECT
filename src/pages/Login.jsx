@@ -36,6 +36,7 @@ function Login() {
 
       // Temporarily save the logged-in user in the browser
       sessionStorage.setItem("user", JSON.stringify(data.user));
+      sessionStorage.setItem("token", data.token);
 
       // Send users to the correct dashboard based on their role
       if (data.user.role === "administrator") {
