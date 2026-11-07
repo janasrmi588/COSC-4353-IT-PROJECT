@@ -9,7 +9,7 @@ import {
 const router = express.Router();
 
 router.get("/", async (req, res) => {
-  const result = await listNotifications(req.query.email, {
+  const result = await listNotifications(req.user.email, {
     unreadOnly: req.query.unread === "true",
   });
 
@@ -28,7 +28,7 @@ router.patch("/:id/read", async (req, res) => {
     return res.status(400).json({ message: "Notification id is not valid." });
   }
 
-  const result = await markNotificationRead(req.query.email, req.params.id);
+  const result = await markNotificationRead(req.user.email, req.params.id);
 
   if (!result.success) {
     return res.status(result.status).json({ message: result.message });

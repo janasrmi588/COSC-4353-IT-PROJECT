@@ -1,5 +1,8 @@
 import express from "express";
 import cors from "cors";
+
+import { requireAuth } from "./modules/auth/auth.middleware.js";
+
 import authRoutes from "./modules/auth/auth.routes.js";
 import notificationRoutes from "./modules/notifications/notifications.routes.js";
 import serviceRoutes from "./modules/services/services.routes.js";
@@ -12,27 +15,31 @@ export function createApp() {
   app.use(cors());
   app.use(express.json());
 
-  // Health check
   app.get("/api/health", (req, res) => {
-    res.json({
-      status: "ok",
-    });
+    res.json({ status: "ok" });
   });
 
-  // Authentication routes
   app.use("/api/auth", authRoutes);
 
-  // Notification routes
-  app.use("/api/notifications", notificationRoutes);
+  app.use("/api/notifications", requireAuth, notificationRoutes);
+  app.use("/api/services", requireAuth, serviceRoutes);
+  app.use("/api/queue", requireAuth, queueRoutes);
+  app.use("/api/history", requireAuth, historyRoutes);
 
-  // Service management routes
-  app.use("/api/services", serviceRoutes);
+  app.use((error, req, res, next) => {
+    if (res.headersSent) return next(error);
 
-  // Queue management routes
-  app.use("/api/queue", queueRoutes);
+    console.error(error.message);
 
-  // History routes
-  app.use("/api/history", historyRoutes);
+    const status = error.status || 500;
+
+    res.status(status).json({
+      message:
+        status >= 500
+          ? "A server error occurred. Please try again."
+          : error.message,
+    });
+  });
 
   return app;
 }

@@ -1,74 +1,122 @@
-import { users } from "../../data/store.js";
+import bcrypt from "bcryptjs";
+import { createHash, randomBytes } from "node:crypto";
 
-export function registerUser(email, password) {
-  if (!email || !password) {
-    return {
-      success: false,
-      status: 400,
-      message: "Email and password are required.",
-    };
-  }
+import UserCredentials from "../../models/UserCredentials.js";
+import Session from "../../models/Session.js";
 
-  const existingUser = users.find(
-    (user) => user.email.toLowerCase() === email.toLowerCase()
-  );
-
-  if (existingUser) {
-    return {
-      success: false,
-      status: 409,
-      message: "An account with this email already exists.",
-    };
-  }
-
-  const newUser = {
-    id: users.length + 1,
-    email: email.toLowerCase(),
-    password,
-    role: "user",
-  };
-
-  users.push(newUser);
-
+function fail(status, message) {
   return {
-    success: true,
-    status: 201,
-    user: {
-      id: newUser.id,
-      email: newUser.email,
-      role: newUser.role,
-    },
+    success: false,
+    status,
+    message,
   };
 }
 
-export function loginUser(email, password) {
-  if (!email || !password) {
-    return {
-      success: false,
-      status: 400,
-      message: "Email and password are required.",
-    };
+function normalizeEmail(email) {
+  return typeof email === "string"
+    ? email.trim().toLowerCase()
+    : "";
+}
+
+export function publicUser(user) {
+  return {
+    id: String(user._id),
+    email: user.email,
+    role: user.role,
+  };
+}
+
+export function hashToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+export async function registerUser(email, password) {
+  email = normalizeEmail(email);
+
+  if (!email || typeof password !== "string" || !password) {
+    return fail(400, "Email and password are required.");
   }
 
-  const user = users.find(
-    (user) => user.email.toLowerCase() === email.toLowerCase()
-  );
-
-  if (!user || user.password !== password) {
-    return {
-      success: false,
-      status: 401,
-      message: "Invalid email or password.",
-    };
+  if (
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    return fail(400, "Enter a valid email address.");
   }
+
+  if (
+    password.length < 8 ||
+    Buffer.byteLength(password, "utf8") > 72
+  ) {
+    return fail(
+      400,
+      "Password must be at least 8 characters and at most 72 UTF-8 bytes.",
+    );
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
+
+  try {
+    const user = await UserCredentials.create({
+      email,
+      passwordHash,
+      role: "user",
+    });
+
+    return {
+      success: true,
+      status: 201,
+      user: publicUser(user),
+    };
+  } catch (error) {
+    if (error.code === 11000) {
+      return fail(
+        409,
+        "An account with this email already exists.",
+      );
+    }
+
+    throw error;
+  }
+}
+
+export async function loginUser(email, password) {
+  email = normalizeEmail(email);
+
+  if (!email || typeof password !== "string" || !password) {
+    return fail(400, "Email and password are required.");
+  }
+
+  if (
+    email.length > 254 ||
+    Buffer.byteLength(password, "utf8") > 72
+  ) {
+    return fail(401, "Invalid email or password.");
+  }
+
+  const user = await UserCredentials.findOne({ email })
+    .select("+passwordHash");
+
+  if (
+    !user ||
+    !user.passwordHash ||
+    !(await bcrypt.compare(password, user.passwordHash))
+  ) {
+    return fail(401, "Invalid email or password.");
+  }
+
+  const token = randomBytes(32).toString("hex");
+
+  await Session.create({
+    tokenHash: hashToken(token),
+    userId: user._id,
+    expiresAt: new Date(Date.now() + 8 * 60 * 60 * 1000),
+  });
 
   return {
     success: true,
     status: 200,
-    user: {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-    },
+    user: publicUser(user),
+    token,
   };
 }

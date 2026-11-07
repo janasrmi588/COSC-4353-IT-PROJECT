@@ -16,16 +16,19 @@ function Login() {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:3001/api/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+      const response = await fetch(
+        "http://localhost:3001/api/auth/login",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
         },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
+      );
 
       const data = await response.json();
 
@@ -34,11 +37,14 @@ function Login() {
         return;
       }
 
-      // Temporarily save the logged-in user in the browser
+      if (!data.user || !data.token) {
+        setError("The backend did not return a login token.");
+        return;
+      }
+
       sessionStorage.setItem("user", JSON.stringify(data.user));
       sessionStorage.setItem("token", data.token);
 
-      // Send users to the correct dashboard based on their role
       if (data.user.role === "administrator") {
         navigate("/admin/dashboard");
       } else {
@@ -59,25 +65,33 @@ function Login() {
         <p className="subtitle">University IT Help Desk</p>
 
         <form onSubmit={handleLogin}>
-          <label>Email</label>
+          <label htmlFor="login-email">Email</label>
           <input
+            id="login-email"
             type="email"
             placeholder="Enter your university email"
+            autoComplete="username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
 
-          <label>Password</label>
+          <label htmlFor="login-password">Password</label>
           <input
+            id="login-password"
             type="password"
             placeholder="Enter your password"
+            autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
           />
 
-          {error && <p className="login-error">{error}</p>}
+          {error && (
+            <p className="login-error" role="alert">
+              {error}
+            </p>
+          )}
 
           <button type="submit" disabled={loading}>
             {loading ? "Logging In..." : "Log In"}
@@ -86,7 +100,9 @@ function Login() {
 
         <p className="register">
           Don't have an account?{" "}
-          <span onClick={() => navigate("/register")}>Register</span>
+          <span onClick={() => navigate("/register")}>
+            Register
+          </span>
         </p>
       </div>
     </div>

@@ -1,58 +1,64 @@
-// History module, logic: track queue participation history for users (in memory or mocked is fine).
-import { queueEntries, services, users } from "../../data/store.js";
+import QueueEntry from "../../models/QueueEntry.js";
+import UserCredentials from "../../models/UserCredentials.js";
+
 export const FINISHED_STATUSES = ["served", "canceled"];
 
-const OUTCOME_LABELS = { served: "Served", canceled: "Canceled" };
+export async function listHistory(userEmail) {
+  const email =
+    typeof userEmail === "string"
+      ? userEmail.trim().toLowerCase()
+      : "";
 
-function fail(status, message) {
-    return { success: false, status, message };
-}
+  if (!email) {
+    return {
+      success: false,
+      status: 401,
+      message: "Please log in first.",
+    };
+  }
 
-function normalizeEmail(email) {
-    return typeof email === "string" ? email.trim().toLowerCase() : "";
-}
+  const user = await UserCredentials.findOne({ email });
 
-// Turn one finished queue entry into a history row for the front end.
-function describeHistoryEntry(entry) {
-    const service = services.find((s) => s.id === entry.serviceId);
-    const finishedAt = entry.finishedAt ?? entry.joinedAt;
+  if (!user) {
+    return {
+      success: false,
+      status: 401,
+      message: "Please log in first.",
+    };
+  }
+
+  const entries = await QueueEntry.find({
+    userId: user._id,
+    status: { $in: FINISHED_STATUSES },
+  })
+    .sort({ finishedAt: -1, _id: -1 })
+    .lean();
+
+  const history = entries.map((entry) => {
+    const joinedAt = new Date(entry.joinedAt).toISOString();
+
+    const finishedAt = entry.finishedAt
+      ? new Date(entry.finishedAt).toISOString()
+      : null;
 
     return {
-        id: entry.id,
-        ticketNumber: entry.ticketNumber,
-        serviceId: entry.serviceId,
-        serviceName: service ? service.name : "Unknown service",
-        status: entry.status,
-        outcome: OUTCOME_LABELS[entry.status] ?? entry.status,
-        joinedAt: entry.joinedAt,
-        finishedAt: entry.finishedAt,
-        date: finishedAt.slice(0, 10),
+      id: String(entry._id),
+      ticketNumber: entry.ticketNumber,
+      serviceId: String(entry.serviceId),
+      serviceName: entry.serviceName,
+      title: entry.title,
+      description: entry.description,
+      status: entry.status,
+      outcome: entry.status === "served" ? "Served" : "Canceled",
+      joinedAt,
+      finishedAt,
+      date: (finishedAt || joinedAt).slice(0, 10),
     };
-}
+  });
 
-export function listHistory(userEmail) {
-    const email = normalizeEmail(userEmail);
-    if (!email) {
-        return fail(401, "Please log in first.");
-    }
-
-    const user = users.find((u) => u.email.toLowerCase() === email);
-    if (!user) {
-        return fail(401, "Please log in first.");
-    }
-
-    const history = queueEntries
-        .filter(
-        (e) =>
-            e.userEmail.toLowerCase() === email &&
-            FINISHED_STATUSES.includes(e.status),
-        )
-    .sort(
-        (a, b) =>
-            new Date(b.finishedAt ?? b.joinedAt) -
-                new Date(a.finishedAt ?? a.joinedAt) || b.id - a.id,
-    )
-    .map(describeHistoryEntry);
-
-    return { success: true, status: 200, history };
+  return {
+    success: true,
+    status: 200,
+    history,
+  };
 }

@@ -1,8 +1,9 @@
 const API_URL = "http://localhost:3001/api/services";
+import { authFetch } from "./authFetch";
 
 async function request(url, options) {
   try {
-    const response = await fetch(url, options);
+    const response = await authFetch(url, options);
     const data = await response.json();
 
     if (!response.ok) {

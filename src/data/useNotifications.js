@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAutoRefresh } from "./useAutoRefresh";
+import { authFetch } from "./authFetch";
 
 const API_URL = "http://localhost:3001/api/notifications";
 
@@ -35,7 +36,7 @@ export function useNotifications(email) {
 
     async function load() {
       try {
-        const response = await fetch(
+        const response = await authFetch(
           `${API_URL}?email=${encodeURIComponent(email)}`,
         );
         const data = await response.json();
