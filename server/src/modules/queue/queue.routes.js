@@ -21,7 +21,7 @@ function sendResult(res, result, successBody) {
 // Express 5 passes a rejected promise from an async handler to the error handler.
 
 router.get("/mine", async (req, res) => {
-  const result = await listMyQueues(req.query.email);
+  const result = await listMyQueues(req.user.email);
   return sendResult(res, result, (r) => ({ entries: r.entries }));
 });
 
