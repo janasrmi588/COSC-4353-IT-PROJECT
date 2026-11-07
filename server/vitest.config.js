@@ -7,7 +7,6 @@ export default defineConfig({
 
       include: [
         "src/modules/**/*.service.js",
-        "src/data/store.js",
         "src/models/**/*.js",
         "src/db/**/*.js",
       ],
