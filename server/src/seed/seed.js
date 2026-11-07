@@ -1,11 +1,32 @@
-// Put the demo data here so everyone can get the same starting data in
-// their database. Passwords must be encrypted before they are stored.
+import bcrypt from "bcryptjs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { connectDatabase, disconnectDatabase } from "../db/connect.js";
-import Service from "../models/Service.js";
 import Queue from "../models/Queue.js";
+import Service from "../models/Service.js";
+import UserCredentials from "../models/UserCredentials.js";
+import UserProfile from "../models/UserProfile.js";
 
-const starterServices = [
+const BCRYPT_ROUNDS = 10;
+
+// Both passwords are at least 8 characters, so they also meet the register rule.
+export const DEMO_USERS = [
+  {
+    email: "student@uh.edu",
+    password: "student123",
+    role: "user",
+    name: "Demo Student",
+  },
+  {
+    email: "admin@uh.edu",
+    password: "admin123",
+    role: "administrator",
+    name: "Demo Admin",
+  },
+];
+
+export const STARTER_SERVICES = [
   {
     name: "Password Reset",
     description: "Reset or unlock your university account.",
@@ -36,46 +57,87 @@ const starterServices = [
   },
 ];
 
-async function seed() {
-  try {
-    await connectDatabase();
+// The profile's name field is called fullName in the agreed design. Use it if
+// the model has it, otherwise fall back to the older displayName.
+function profileNameField() {
+  return UserProfile.schema.path("fullName") ? "fullName" : "displayName";
+}
 
-    await Promise.all([
-      Service.init(),
-      Queue.init(),
-    ]);
+// Adds whatever demo data is missing and returns how much it added.
+// Expects Mongoose to be connected already.
+export async function seedDatabase() {
+  const added = { users: 0, profiles: 0, services: 0, queues: 0 };
+  const nameField = profileNameField();
 
-    for (const item of starterServices) {
-      const nameKey = item.name.trim().toLowerCase();
+  await Promise.all([
+    UserCredentials.init(),
+    UserProfile.init(),
+    Service.init(),
+    Queue.init(),
+  ]);
 
-      let service = await Service.findOne({ nameKey });
+  for (const demo of DEMO_USERS) {
+    let user = await UserCredentials.findOne({ email: demo.email });
 
-      if (!service) {
-        service = await Service.create({
-          name: item.name,
-          description: item.description,
-          expectedDuration: item.expectedDuration,
-          priority: item.priority,
-        });
-      }
-
-      // Create a queue only if this service doesn't already have one.
-      // Existing queue status and ticket counter stay unchanged.
-      await Queue.updateOne(
-        { serviceId: service._id },
-        {
-          $setOnInsert: {
-            status: item.status,
-            ticketCounter: 0,
-          },
-        },
-        { upsert: true, runValidators: true },
-      );
-
-      console.log(`Ready: ${service.name}`);
+    if (!user) {
+      user = await UserCredentials.create({
+        email: demo.email,
+        passwordHash: await bcrypt.hash(demo.password, BCRYPT_ROUNDS),
+        role: demo.role,
+      });
+      added.users += 1;
     }
 
-    console.log("Starter services added successfully.");
+    const profile = await UserProfile.updateOne(
+      { userId: user._id },
+      { $setOnInsert: { [nameField]: demo.name } },
+      { upsert: true },
+    );
+    added.profiles += profile.upsertedCount;
+  }
+
+  for (const item of STARTER_SERVICES) {
+    const nameKey = item.name.trim().toLowerCase();
+
+    let service = await Service.findOne({ nameKey });
+
+    if (!service) {
+      service = await Service.create({
+        name: item.name,
+        description: item.description,
+        expectedDuration: item.expectedDuration,
+        priority: item.priority,
+      });
+      added.services += 1;
+    }
+
+
+    const queue = await Queue.updateOne(
+      { serviceId: service._id },
+      {
+        $setOnInsert: {
+          status: item.status,
+          ticketCounter: 0,
+        },
+      },
+      { upsert: true, runValidators: true },
+    );
+    added.queues += queue.upsertedCount;
+  }
+
+  return added;
+}
+
+
+async function main() {
+  try {
+    await connectDatabase();
+    const added = await seedDatabase();
+
+    console.log(
+      `Seed finished. Added ${added.users} users, ${added.profiles} profiles, ` +
+        `${added.services} services and ${added.queues} queues.`,
+    );
   } catch (error) {
     console.error("Seed failed:", error.message);
     process.exitCode = 1;
@@ -84,4 +146,11 @@ async function seed() {
   }
 }
 
-seed();
+const startedDirectly =
+  process.argv[1] &&
+  pathToFileURL(path.resolve(process.argv[1])).href.toLowerCase() ===
+    import.meta.url.toLowerCase();
+
+if (startedDirectly) {
+  await main();
+}
